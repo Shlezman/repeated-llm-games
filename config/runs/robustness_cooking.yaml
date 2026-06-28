@@ -1,0 +1,30 @@
+# Robustness check: cooking-competition cover story + dollars unit. Game-preserving —
+# the underlying PD/BoS payoffs are unchanged, only the framing differs.
+name: robustness_cooking
+rounds: 10
+seed: 42
+mode: base
+
+models:
+  - id: model_a
+    provider: litellm
+    model: ${LLMGAMES_MODEL_A}
+    params: { temperature: 0.0, max_tokens: 8 }
+
+opponents:
+  - tit_for_tat
+  - defect_once
+self_play: false
+
+games:
+  canonical: [pd, bos]
+
+robustness:
+  randomize_order: true
+  utility_label: dollars
+  cover_story: cooking
+
+cache:
+  backend: postgres
+
+output_dir: results

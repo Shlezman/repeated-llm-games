@@ -1,0 +1,40 @@
+# Default run = the exact paper games (canonical Prisoner's Dilemma + Battle of the
+# Sexes, 10 rounds, base prompting). Models are inputs: set LLMGAMES_MODEL_A/B in the
+# environment (see .env.example). For an offline smoke test, run with --mock.
+name: paper_default
+rounds: 10
+seed: 42
+mode: base
+
+models:
+  - id: model_a
+    provider: litellm
+    model: ${LLMGAMES_MODEL_A}
+    params: { temperature: 0.0, max_tokens: 8 }
+  - id: model_b
+    provider: litellm
+    model: ${LLMGAMES_MODEL_B}
+    params: { temperature: 0.0, max_tokens: 8 }
+
+# Hand-coded baselines from the paper.
+opponents:
+  - tit_for_tat
+  - always_defect
+  - always_cooperate
+  - defect_once
+  - alternate
+self_play: true
+
+games:
+  canonical: [pd, bos]
+  all_144: false
+
+robustness:
+  randomize_order: true
+  utility_label: points
+  cover_story: none
+
+cache:
+  backend: postgres   # reads DATABASE_URL; use 'memory' for offline runs
+
+output_dir: results

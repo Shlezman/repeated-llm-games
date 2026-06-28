@@ -1,0 +1,34 @@
+# Same games as paper_default but with Social Chain-of-Thought (predict-then-act).
+name: paper_scot
+rounds: 10
+seed: 42
+mode: scot
+
+models:
+  - id: model_a
+    provider: litellm
+    model: ${LLMGAMES_MODEL_A}
+    params: { temperature: 0.0, max_tokens: 8 }
+  - id: model_b
+    provider: litellm
+    model: ${LLMGAMES_MODEL_B}
+    params: { temperature: 0.0, max_tokens: 8 }
+
+opponents:
+  - tit_for_tat
+  - always_defect
+  - alternate
+self_play: true
+
+games:
+  canonical: [pd, bos]
+
+robustness:
+  randomize_order: true
+  utility_label: points
+  cover_story: none
+
+cache:
+  backend: postgres
+
+output_dir: results

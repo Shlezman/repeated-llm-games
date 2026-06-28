@@ -1,0 +1,22 @@
+# Secrets
+.env
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+.venv313/
+venv/
+nb_results/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Run outputs (regenerated)
+results/

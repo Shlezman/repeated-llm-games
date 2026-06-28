@@ -1,0 +1,32 @@
+# Full 144-game ordinal taxonomy (for the Table 1 score-ratio sweep across families).
+# Heavy: every model plays every game. Keep the model count and opponents small.
+name: all_144
+rounds: 10
+seed: 42
+mode: base
+
+models:
+  - id: model_a
+    provider: litellm
+    model: ${LLMGAMES_MODEL_A}
+    params: { temperature: 0.0, max_tokens: 8 }
+
+opponents:
+  - tit_for_tat
+self_play: true
+
+games:
+  canonical: []
+  all_144: true
+  games_csv: config/games.csv
+
+robustness:
+  randomize_order: true
+  utility_label: points
+  cover_story: none
+  labels: random   # paper protocol: seeded uppercase pair per run (avoids J/F priming)
+
+cache:
+  backend: postgres
+
+output_dir: results
