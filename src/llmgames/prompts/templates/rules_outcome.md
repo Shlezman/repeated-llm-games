@@ -1,0 +1,1 @@
+If you {verb} {option_word} {my_label} and {opponent} {verb}s {option_word} {opp_label}, then you win {my_pts} {unit} and {opponent} wins {opp_pts} {unit}.

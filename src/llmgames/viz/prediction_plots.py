@@ -45,6 +45,7 @@ def save_bar(
         ax.bar(labels, df[value].tolist(), color="#4C72B0")
         ax.set_ylabel(ylabel or value)
         ax.set_title(title)
+        ax.set_xticks(range(len(labels)))  # fix tick positions before labelling
         ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
         ax.grid(True, axis="y", alpha=0.3)
 

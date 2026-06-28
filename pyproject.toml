@@ -10,6 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
+    "langchain>=0.3",
+    "langchain-core>=0.3",
+    "langgraph>=0.2",
+    "SQLAlchemy>=2.0",
     "pydantic>=2.5",
     "pandas>=2.0",
     "matplotlib>=3.7",
@@ -17,9 +21,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-litellm = ["litellm>=1.40"]
-anthropic = ["anthropic>=0.34"]
-openai = ["openai>=1.40"]
+openai = ["langchain-openai>=0.2"]
+anthropic = ["langchain-anthropic>=0.2"]
 postgres = ["psycopg[binary]>=3.1"]
 dev = ["pytest>=7.4", "pytest-cov>=4.1"]
 

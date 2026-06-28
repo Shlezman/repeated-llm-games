@@ -8,11 +8,11 @@ mode: base
 
 models:
   - id: model_a
-    provider: litellm
+    provider: ${LLMGAMES_PROVIDER_A}   # openai | anthropic | ... ; empty = infer from model id
     model: ${LLMGAMES_MODEL_A}
     params: { temperature: 0.0, max_tokens: 8 }
   - id: model_b
-    provider: litellm
+    provider: ${LLMGAMES_PROVIDER_B}
     model: ${LLMGAMES_MODEL_B}
     params: { temperature: 0.0, max_tokens: 8 }
 
