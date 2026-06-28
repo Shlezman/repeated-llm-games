@@ -23,8 +23,8 @@ from ..players.base import Player
 from ..players.llm_player import LLMPlayer
 from ..players.strategies import make_strategy
 from ..prompts.transforms import DEFAULT_LABELS, build_framing, order_sequence
-from ..providers.cache import CachingProvider
-from ..providers.registry import make_cache, make_provider
+from ..providers.cache import configure_cache
+from ..providers.models import build_chat_model
 from .match import play_match
 
 PlayerFactory = Callable[[], Player]
@@ -84,15 +84,16 @@ def _resolve_labels(spec_labels, seed: int) -> tuple[str, str]:
     return (spec_labels[0], spec_labels[1])
 
 
-def _build_llm_factories(run, cache) -> list[tuple[str, PlayerFactory]]:
+def _build_llm_factories(run) -> list[tuple[str, PlayerFactory]]:
     """Builds (name, factory) pairs for each configured model.
 
     Args:
         run: The run specification.
-        cache: The shared cache backend.
 
     Returns:
-        A list of ``(player_name, factory)`` tuples.
+        A list of ``(player_name, factory)`` tuples. The chat model is shared
+        (stateless); a fresh :class:`LLMPlayer` (graph + per-round state) is built
+        per match.
     """
     framing = build_framing(
         cover_story=run.robustness.cover_story,
@@ -102,12 +103,16 @@ def _build_llm_factories(run, cache) -> list[tuple[str, PlayerFactory]]:
     scot = run.mode == "scot"
     factories: list[tuple[str, PlayerFactory]] = []
     for spec in run.models:
-        provider = CachingProvider(make_provider(spec.provider, spec.model), cache)
-        params = spec.params.to_gen_params()
+        model = build_chat_model(
+            spec.provider,
+            spec.model,
+            temperature=spec.params.temperature,
+            max_tokens=spec.params.max_tokens,
+        )
         name = f"{spec.id}" + ("+scot" if scot else "")
 
-        def factory(provider=provider, params=params, name=name) -> Player:
-            return LLMPlayer(name, provider, params, framing, scot=scot)
+        def factory(model=model, name=name) -> Player:
+            return LLMPlayer(name, model, framing, scot=scot)
 
         factories.append((name, factory))
     return factories
@@ -166,8 +171,8 @@ def run_tournament(run) -> RunResult:
     Returns:
         A :class:`RunResult` with results and artifact paths.
     """
-    cache = make_cache(run.cache.backend, dsn=run.cache.dsn, table=run.cache.table)
-    llm_factories = _build_llm_factories(run, cache)
+    configure_cache(run.cache.backend, run.cache.dsn)
+    llm_factories = _build_llm_factories(run)
     strat_factories = _build_strategy_factories(run)
     roster = llm_factories + strat_factories
     llm_names = {name for name, _ in llm_factories}

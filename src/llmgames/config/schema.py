@@ -8,30 +8,21 @@ codebase — they enter only through :class:`ModelSpec`.
 
 from __future__ import annotations
 
-import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
-
-from ..providers.base import GenParams
+from pydantic import BaseModel, Field
 
 
 class ParamsSpec(BaseModel):
-    """Generation parameters for a model, mirroring :class:`GenParams`."""
+    """Generation parameters passed through to the chat model.
+
+    Attributes:
+        temperature: Sampling temperature; 0.0 for deterministic study runs.
+        max_tokens: Max output tokens (kept small but >1 so chat models can answer).
+    """
 
     temperature: float = 0.0
     max_tokens: int = 8
-    top_p: float = 1.0
-    seed: int | None = None
-
-    def to_gen_params(self) -> GenParams:
-        """Converts this spec into a runtime :class:`GenParams`."""
-        return GenParams(
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            top_p=self.top_p,
-            seed=self.seed,
-        )
 
 
 class ModelSpec(BaseModel):
@@ -39,14 +30,15 @@ class ModelSpec(BaseModel):
 
     Attributes:
         id: Stable label used in results (e.g. "model_a").
-        provider: Registered provider adapter name (e.g. "litellm").
-        model: The model identifier passed to the provider. Required — never
+        provider: LangChain backend selector ("openai", "anthropic", "auto", "mock",
+            ...). "auto" lets LangChain infer the provider from the model id.
+        model: The model identifier passed to the backend. Required — never
             defaulted — so no model name is ever implied by code.
         params: Generation parameters.
     """
 
     id: str
-    provider: str = "litellm"
+    provider: str = "auto"
     model: str
     params: ParamsSpec = Field(default_factory=ParamsSpec)
 
@@ -74,32 +66,12 @@ class CacheSpec(BaseModel):
     """Response cache configuration.
 
     Attributes:
-        backend: "postgres" (default; reads DATABASE_URL) or "memory".
+        backend: "postgres" (default; reads DATABASE_URL via SQLAlchemy) or "memory".
         dsn: Optional explicit DSN; falls back to the DATABASE_URL env var.
-        table: Cache table name for the Postgres backend.
     """
 
     backend: Literal["postgres", "memory"] = "postgres"
     dsn: str | None = None
-    table: str = "llm_response_cache"
-
-    @field_validator("table")
-    @classmethod
-    def _validate_table(cls, value: str) -> str:
-        """Ensures the cache table is a safe ASCII SQL identifier.
-
-        Args:
-            value: The configured table name.
-
-        Returns:
-            The validated table name.
-
-        Raises:
-            ValueError: If the name is not a valid ``[A-Za-z_][A-Za-z0-9_]*`` identifier.
-        """
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
-            raise ValueError(f"Unsafe cache table identifier: {value!r}")
-        return value
 
 
 class GameSelector(BaseModel):

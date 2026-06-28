@@ -1,0 +1,1 @@
+{intro} In this game, you can {verb} between {option_word} {label_a} and {option_word} {label_b}. You will play {num_rounds} {round_word}s in total with the same player. The rules of the game are as follows:

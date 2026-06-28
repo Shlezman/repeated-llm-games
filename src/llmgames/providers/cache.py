@@ -1,178 +1,128 @@
-"""Response cache: deterministic, cheap re-runs for temperature=0 experiments.
+"""Configure LangChain's global LLM cache for deterministic, cheap re-runs.
 
-The cache is keyed on ``(provider, model, params, prompt)`` so identical requests
-return identical text without another API call. The default backend is Postgres
-(connection string from the ``DATABASE_URL`` environment variable); an in-memory
-backend is provided for tests and offline use.
+At temperature 0 the same prompt yields the same reply; caching makes re-runs
+identical and avoids repeat API calls. The default backend is a small Postgres cache
+(this module's :class:`PostgresLLMCache`, connection string from ``DATABASE_URL``); an
+in-memory backend is used for tests and offline runs.
 
-Security: all SQL uses parameterized queries (never string concatenation), and the
-database connection string is read from the environment — credentials are never
-hardcoded. TLS is requested via ``sslmode`` (default ``require``, overridable).
+Security: the connection string comes from the environment (never hardcoded); all SQL
+binds values as parameters; the table name is validated as a SQL identifier; and TLS
+is requested via ``sslmode`` (default ``require``).
 """
 
 from __future__ import annotations
 
-import hashlib
 import os
 import re
-from typing import Protocol, runtime_checkable
 
-from .base import GenParams, Provider
+from langchain_core.caches import RETURN_VAL_TYPE, BaseCache
+from langchain_core.load import dumps, loads
 
-
-def make_cache_key(provider: str, model: str, params: GenParams, prompt: str) -> str:
-    """Builds a stable cache key for a completion request.
-
-    Args:
-        provider: Provider name (e.g. "litellm").
-        model: Model identifier.
-        params: Generation parameters.
-        prompt: The fully-rendered prompt.
-
-    Returns:
-        A hex SHA-256 digest uniquely identifying the request.
-    """
-    payload = "\x1f".join([provider, model, params.canonical(), prompt])
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
-@runtime_checkable
-class CacheBackend(Protocol):
-    """A key/value store for cached completion text."""
+class PostgresLLMCache(BaseCache):
+    """A Postgres-backed LangChain LLM cache using parameterized SQL.
 
-    def get(self, key: str) -> str | None:
-        """Returns the cached value for ``key`` or None if absent."""
-        ...
-
-    def set(self, key: str, value: str) -> None:
-        """Stores ``value`` under ``key`` (idempotent upsert)."""
-        ...
-
-
-class InMemoryCache:
-    """A process-local cache backend for tests and offline runs."""
-
-    def __init__(self) -> None:
-        """Initializes an empty in-memory store."""
-        self._store: dict[str, str] = {}
-
-    def get(self, key: str) -> str | None:
-        """Returns the cached value for ``key`` or None."""
-        return self._store.get(key)
-
-    def set(self, key: str, value: str) -> None:
-        """Stores ``value`` under ``key``."""
-        self._store[key] = value
-
-
-class PostgresCache:
-    """A Postgres-backed completion cache using parameterized queries.
-
-    The table is created on first use. Connection details come from the
-    environment, never from code.
+    Entries are keyed on ``(prompt, llm_string)`` — LangChain's standard cache key —
+    and store the serialized generation list.
 
     Attributes:
-        table: Name of the cache table.
+        table: The validated cache table name.
     """
 
-    def __init__(
-        self,
-        dsn: str | None = None,
-        *,
-        table: str = "llm_response_cache",
-        sslmode: str | None = None,
-    ) -> None:
-        """Opens a connection and ensures the cache table exists.
+    def __init__(self, url: str, *, table: str = "llm_cache", sslmode: str | None = None) -> None:
+        """Opens an engine and ensures the cache table exists.
 
         Args:
-            dsn: Postgres connection string. Defaults to ``$DATABASE_URL``.
-            table: Cache table name (validated as an identifier).
-            sslmode: TLS mode. Defaults to ``$PGSSLMODE`` or ``require``.
+            url: SQLAlchemy/Postgres connection URL.
+            table: Cache table name (validated as a SQL identifier).
+            sslmode: TLS mode; defaults to ``$PGSSLMODE`` or ``require``.
 
         Raises:
-            RuntimeError: If no DSN is available from args or environment.
-            ValueError: If ``table`` is not a safe SQL identifier.
+            ValueError: If ``table`` is not a safe identifier.
         """
-        import psycopg  # imported lazily so tests need no DB driver
+        from sqlalchemy import create_engine
 
-        resolved_dsn = dsn or os.environ.get("DATABASE_URL")
-        if not resolved_dsn:
-            raise RuntimeError(
-                "PostgresCache requires a connection string via DATABASE_URL or the dsn argument."
-            )
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table):
+        if not _IDENTIFIER.fullmatch(table):
             raise ValueError(f"Unsafe cache table identifier: {table!r}")
-
         self.table = table
         resolved_ssl = sslmode or os.environ.get("PGSSLMODE", "require")
-        self._conn = psycopg.connect(resolved_dsn, sslmode=resolved_ssl, autocommit=True)
+        connect_args = {"sslmode": resolved_ssl} if url.startswith("postgres") else {}
+        self._engine = create_engine(url, connect_args=connect_args)
         self._ensure_table()
 
     def _ensure_table(self) -> None:
         """Creates the cache table if it does not already exist."""
-        # `table` is validated as a bare identifier in __init__; values are bound.
-        with self._conn.cursor() as cur:
-            cur.execute(
-                f"CREATE TABLE IF NOT EXISTS {self.table} "
-                "(cache_key TEXT PRIMARY KEY, value TEXT NOT NULL, "
-                "created_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+        from sqlalchemy import text
+
+        with self._engine.begin() as conn:
+            conn.execute(
+                text(
+                    f"CREATE TABLE IF NOT EXISTS {self.table} "
+                    "(prompt TEXT NOT NULL, llm TEXT NOT NULL, val TEXT NOT NULL, "
+                    "PRIMARY KEY (prompt, llm))"
+                )
             )
 
-    def get(self, key: str) -> str | None:
-        """Returns the cached value for ``key`` or None."""
-        with self._conn.cursor() as cur:
-            cur.execute(f"SELECT value FROM {self.table} WHERE cache_key = %s", (key,))
-            row = cur.fetchone()
-        return row[0] if row else None
+    def lookup(self, prompt: str, llm_string: str) -> RETURN_VAL_TYPE | None:
+        """Returns the cached generations for ``(prompt, llm_string)`` or None."""
+        from sqlalchemy import text
 
-    def set(self, key: str, value: str) -> None:
-        """Upserts ``value`` under ``key``."""
-        with self._conn.cursor() as cur:
-            cur.execute(
-                f"INSERT INTO {self.table} (cache_key, value) VALUES (%s, %s) "
-                "ON CONFLICT (cache_key) DO UPDATE SET value = EXCLUDED.value",
-                (key, value),
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                text(f"SELECT val FROM {self.table} WHERE prompt = :p AND llm = :l"),
+                {"p": prompt, "l": llm_string},
+            ).fetchone()
+        return loads(row[0]) if row else None
+
+    def update(self, prompt: str, llm_string: str, return_val: RETURN_VAL_TYPE) -> None:
+        """Upserts the generations for ``(prompt, llm_string)``."""
+        from sqlalchemy import text
+
+        with self._engine.begin() as conn:
+            conn.execute(
+                text(
+                    f"INSERT INTO {self.table} (prompt, llm, val) VALUES (:p, :l, :v) "
+                    "ON CONFLICT (prompt, llm) DO UPDATE SET val = EXCLUDED.val"
+                ),
+                {"p": prompt, "l": llm_string, "v": dumps(return_val)},
             )
 
-    def close(self) -> None:
-        """Closes the underlying database connection."""
-        self._conn.close()
+    def clear(self, **kwargs: object) -> None:
+        """Empties the cache table."""
+        from sqlalchemy import text
+
+        with self._engine.begin() as conn:
+            conn.execute(text(f"DELETE FROM {self.table}"))
 
 
-class CachingProvider:
-    """Decorates any :class:`Provider` with read-through caching.
+def configure_cache(backend: str, dsn: str | None = None) -> None:
+    """Installs the process-global LangChain LLM cache.
 
-    Attributes:
-        provider_name: Mirrors the wrapped provider's name.
-        model: Mirrors the wrapped provider's model.
+    Args:
+        backend: "postgres" (default infra) or "memory".
+        dsn: Optional Postgres connection string; falls back to ``$DATABASE_URL``.
+
+    Raises:
+        RuntimeError: If the Postgres backend is selected without a connection string.
+        ValueError: If ``backend`` is unknown.
     """
+    from langchain_core.globals import set_llm_cache
 
-    def __init__(self, inner: Provider, cache: CacheBackend) -> None:
-        """Wraps ``inner`` so completions are served from ``cache`` when present.
+    if backend == "memory":
+        from langchain_core.caches import InMemoryCache
 
-        Args:
-            inner: The underlying provider performing real API calls.
-            cache: The cache backend.
-        """
-        self._inner = inner
-        self._cache = cache
-        self.provider_name = inner.provider_name
-        self.model = inner.model
+        set_llm_cache(InMemoryCache())
+        return
 
-    def complete(self, prompt: str, params: GenParams) -> str:
-        """Returns cached text if present, otherwise calls the inner provider and caches it.
+    if backend == "postgres":
+        url = dsn or os.environ.get("DATABASE_URL")
+        if not url:
+            raise RuntimeError(
+                "Postgres cache requires a connection string via DATABASE_URL or the dsn argument."
+            )
+        set_llm_cache(PostgresLLMCache(url))
+        return
 
-        Args:
-            prompt: The fully-rendered prompt.
-            params: Generation parameters.
-
-        Returns:
-            The completion text.
-        """
-        key = make_cache_key(self.provider_name, self.model, params, prompt)
-        cached = self._cache.get(key)
-        if cached is not None:
-            return cached
-        text = self._inner.complete(prompt, params)
-        self._cache.set(key, text)
-        return text
+    raise ValueError(f"Unknown cache backend: {backend!r}")

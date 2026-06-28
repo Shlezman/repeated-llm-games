@@ -1,0 +1,1 @@
+In {round_word} {idx}, you chose {option_word} {my_label} and {opponent} chose {option_word} {opp_label}. Thus, you won {my_pts} {unit} and {opponent} won {opp_pts} {unit}.

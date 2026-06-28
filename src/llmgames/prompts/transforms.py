@@ -1,18 +1,61 @@
-"""Robustness transforms: framing presets and seeded option ordering.
+"""Framing and robustness transforms: surface presentation, never the game itself.
 
-Every transform here is *game-preserving* — it changes only surface presentation
-(labels, unit word, cover story, the order options are offered), never the payoff
-matrix. Payoffs always come from the :class:`~llmgames.engine.game.Game` itself.
+A :class:`Framing` carries the vocabulary (display labels, the word for an option,
+the unit word, the opponent noun, cover-story intro) that fills the markdown prompt
+templates. Every transform here is *game-preserving* — payoffs always come from the
+:class:`~llmgames.engine.game.Game`; framing only changes wording, labels, the unit,
+the cover story, and the order options are offered.
 """
 
 from __future__ import annotations
 
 import random
+from dataclasses import dataclass
 
 from ..engine.game import ACTIONS, Action
-from .builder import Framing
 
 DEFAULT_LABELS: tuple[str, str] = ("J", "F")
+
+
+@dataclass(frozen=True)
+class Framing:
+    """Surface presentation of a game; never alters payoffs or structure.
+
+    Attributes:
+        action_labels: Maps each internal action to its displayed label (e.g. A->"J").
+        option_word: Noun for a choice ("Option", "Recipe", "Approach").
+        round_word: Noun for a round ("round", "dish", "phase").
+        unit_word: Payoff unit ("points", "dollars", "coins").
+        opponent_word: How the opponent is referred to ("the other player").
+        choose_verb: Verb for selecting ("choose").
+        intro: Opening sentence template; ``{opponent}`` is substituted at render time.
+    """
+
+    action_labels: dict[Action, str]
+    option_word: str = "Option"
+    round_word: str = "round"
+    unit_word: str = "points"
+    opponent_word: str = "the other player"
+    choose_verb: str = "choose"
+    # Matches the original opening sentence ("...with another player."); cover stories
+    # override with their own intro using the {opponent} placeholder.
+    intro: str = "You are playing a game repeatedly with another player."
+
+    def label(self, action: Action) -> str:
+        """Returns the display label for a known internal action."""
+        return self.action_labels[action]
+
+    def display(self, action: Action) -> str:
+        """Returns the display label, or the raw action for unknown/unparseable ones.
+
+        Used when rendering history, which may contain the unparseable sentinel from a
+        prior round; this must never raise.
+        """
+        return self.action_labels.get(action, action)
+
+    def intro_text(self) -> str:
+        """Returns the intro sentence with the opponent noun substituted in."""
+        return self.intro.format(opponent=self.opponent_word)
 
 
 def build_framing(
@@ -59,9 +102,7 @@ def build_framing(
     raise ValueError(f"Unknown cover story: {cover_story!r}")
 
 
-def order_sequence(
-    *, seed: int, num_rounds: int, randomize: bool
-) -> list[tuple[Action, Action]]:
+def order_sequence(*, seed: int, num_rounds: int, randomize: bool) -> list[tuple[Action, Action]]:
     """Produces a deterministic per-round option presentation order.
 
     Args:
