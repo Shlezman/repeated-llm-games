@@ -247,8 +247,3 @@ results.py   results.md generator   ·   cli.py   command-line entrypoint
 - The Postgres cache uses parameterized SQL, a validated table identifier, and requests
   TLS (`PGSSLMODE`, default `require`).
 - The Fig 7 harness **only analyses real participant data** — it never synthesizes humans.
-
-## License
-
-MIT. Retains the original authors' copyright; see [LICENSE](LICENSE). The 144-game CSV and
-human dataset are reproduced from the original MIT release.
