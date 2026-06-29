@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import re
+import warnings
 
 from langchain_core.caches import RETURN_VAL_TYPE, BaseCache
 from langchain_core.load import dumps, loads
@@ -74,7 +75,12 @@ class PostgresLLMCache(BaseCache):
                 text(f"SELECT val FROM {self.table} WHERE prompt = :p AND llm = :l"),
                 {"p": prompt, "l": llm_string},
             ).fetchone()
-        return loads(row[0]) if row else None
+        if not row:
+            return None
+        # Cache content is trusted — we serialized it ourselves via dumps() in update().
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return loads(row[0])
 
     def update(self, prompt: str, llm_string: str, return_val: RETURN_VAL_TYPE) -> None:
         """Upserts the generations for ``(prompt, llm_string)``."""

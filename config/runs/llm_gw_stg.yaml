@@ -1,0 +1,34 @@
+# Run against the internal LLM gateway (OpenAI-compatible) — staging.
+# Set in .env: OPENAI_API_KEY (the stg llm-gw key), LLM_GW_BASE_URL, LLM_GW_MODEL.
+# Small + cheap: one model vs three hand-coded opponents, canonical PD + BoS, base mode,
+# in-memory cache (no Postgres needed).
+name: llm_gw_stg
+rounds: 10
+seed: 42
+mode: base
+
+models:
+  - id: gw_model
+    provider: openai                 # OpenAI-compatible gateway
+    model: ${LLM_GW_MODEL}           # the model id the gateway serves
+    base_url: ${LLM_GW_BASE_URL}     # e.g. https://<stg-llm-gw-host>/v1
+    params: { temperature: 0.0, max_tokens: 8 }
+
+opponents:
+  - tit_for_tat
+  - always_defect
+  - alternate
+self_play: true
+
+games:
+  canonical: [pd, bos]
+
+robustness:
+  randomize_order: true
+  utility_label: points
+  cover_story: none
+
+cache:
+  backend: memory
+
+output_dir: results

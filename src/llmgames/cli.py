@@ -8,11 +8,15 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import logging
+
+from pathlib import Path
 
 from .config.loader import load_run_spec
 from .config.schema import RunSpec
 from .loop.tournament import run_tournament
 from .results import generate_results_md
+from .viz.replay import generate_replay_html
 
 
 def _force_mock(run: RunSpec) -> RunSpec:
@@ -35,9 +39,20 @@ def _cmd_run(args: argparse.Namespace) -> None:
     if args.mock:
         run = _force_mock(run)
     result = run_tournament(run)
+    logging.getLogger("llmgames.cli").info("Generating results.md, figures, and game_replay.html...")
     results_md = generate_results_md(run, result)
     print(f"Rounds CSV : {result.rounds_csv}")
     print(f"Results doc: {results_md}")
+    logging.getLogger("llmgames.cli").info("DONE — open %s (and game_replay.html beside it)", results_md)
+
+
+def _cmd_replay(args: argparse.Namespace) -> None:
+    """Executes the ``replay`` subcommand: (re)generate the HTML replay from CSV(s)."""
+    rounds = [Path(r) for r in args.rounds]
+    out = Path(args.out) if args.out else rounds[0].with_name("game_replay.html")
+    name = args.name or (rounds[0].parent.name if len(rounds) == 1 else "combined")
+    path = generate_replay_html(rounds, out, run_name=name)
+    print(f"Replay: {path}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -51,11 +66,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--mock", action="store_true", help="Use the mock provider + in-memory cache (offline)."
     )
     run_parser.set_defaults(func=_cmd_run)
+
+    replay_parser = sub.add_parser("replay", help="Generate the animated HTML replay from rounds.csv(s).")
+    replay_parser.add_argument(
+        "--rounds", required=True, nargs="+", help="One or more rounds.csv paths (merged into one HTML)."
+    )
+    replay_parser.add_argument("--out", help="Output HTML path (default: game_replay.html beside the CSV).")
+    replay_parser.add_argument("--name", help="Run name shown in the header.")
+    replay_parser.set_defaults(func=_cmd_replay)
     return parser
 
 
 def main(argv: list[str] | None = None) -> None:
     """CLI entrypoint."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
     parser = build_parser()
     args = parser.parse_args(argv)
     args.func(args)

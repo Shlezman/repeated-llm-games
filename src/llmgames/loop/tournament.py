@@ -9,8 +9,10 @@ per-match state (SCoT prediction cache, strategy RNG) never leaks between matche
 from __future__ import annotations
 
 import itertools
+import logging
 import random
 import string
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -27,6 +29,7 @@ from ..providers.cache import configure_cache
 from ..providers.models import build_chat_model
 from .match import play_match
 
+_LOGGER = logging.getLogger(__name__)
 PlayerFactory = Callable[[], Player]
 
 
@@ -43,6 +46,7 @@ class RunResult:
     results: list
     rounds_csv: Path
     output_dir: Path
+    thoughts_csv: Path | None = None
 
 
 def resolve_games(selector) -> list[Game]:
@@ -108,11 +112,13 @@ def _build_llm_factories(run) -> list[tuple[str, PlayerFactory]]:
             spec.model,
             temperature=spec.params.temperature,
             max_tokens=spec.params.max_tokens,
+            base_url=spec.base_url,
+            timeout=spec.params.request_timeout,
         )
         name = f"{spec.id}" + ("+scot" if scot else "")
 
         def factory(model=model, name=name) -> Player:
-            return LLMPlayer(name, model, framing, scot=scot)
+            return LLMPlayer(name, model, framing, scot=scot, reasoning=run.reasoning)
 
         factories.append((name, factory))
     return factories
@@ -162,8 +168,42 @@ def _match_rows(result, game: Game, mode: str) -> list[dict]:
     ]
 
 
+def _thought_rows(result, game: Game) -> list[dict]:
+    """Serializes one match's per-round reasoning capture (one row per player-seat).
+
+    Args:
+        result: The completed match result.
+        game: The game played.
+
+    Returns:
+        Rows with the SCoT prediction and raw reply text for each seat, per round.
+    """
+    rows: list[dict] = []
+    seats = (
+        (result.player1_name, result.player2_name, result.thoughts_p1, result.actions_p1),
+        (result.player2_name, result.player1_name, result.thoughts_p2, result.actions_p2),
+    )
+    for player, opponent, thoughts, actions in seats:
+        for rnd, thought in enumerate(thoughts):
+            if not thought:
+                continue
+            rows.append(
+                {
+                    "game_name": game.name,
+                    "player": player,
+                    "opponent": opponent,
+                    "round": rnd + 1,
+                    "action": actions[rnd],
+                    "predicted": thought.get("predicted") or "",
+                    "predict_text": thought.get("predict_text", ""),
+                    "decide_text": thought.get("decide_text", ""),
+                }
+            )
+    return rows
+
+
 def run_tournament(run) -> RunResult:
-    """Runs the full tournament described by ``run`` and writes a per-round CSV.
+    """Runs the full tournament described by ``run`` and writes per-round CSVs.
 
     Args:
         run: A :class:`~llmgames.config.schema.RunSpec`.
@@ -171,6 +211,7 @@ def run_tournament(run) -> RunResult:
     Returns:
         A :class:`RunResult` with results and artifact paths.
     """
+    start = time.monotonic()
     configure_cache(run.cache.backend, run.cache.dsn)
     llm_factories = _build_llm_factories(run)
     strat_factories = _build_strategy_factories(run)
@@ -181,13 +222,31 @@ def run_tournament(run) -> RunResult:
     output_dir = Path(run.output_dir) / run.name
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Total matches up front (for progress), then a throttled per-match log.
+    n_llm, n_strat = len(llm_factories), len(strat_factories)
+    pairs = len(roster) ** 2
+    if not run.self_play:
+        pairs -= n_strat ** 2  # drop strategy-vs-strategy
+    if not run.model_vs_model:
+        pairs -= n_llm ** 2  # drop model-vs-model
+    total = len(games) * pairs
+    log_every = 1 if total <= 300 else max(1, total // 100)
+    _LOGGER.info(
+        "Run '%s' started: %d models + %d strategies, %d game(s), mode=%s%s -> %d matches",
+        run.name, len(llm_factories), len(strat_factories), len(games), run.mode,
+        " +reasoning" if run.reasoning else "", total,
+    )
+
     rows: list[dict] = []
+    thought_rows: list[dict] = []
     results = []
     match_counter = 0
 
     for game in games:
         for (name1, make1), (name2, make2) in itertools.product(roster, roster):
             if not run.self_play and not (name1 in llm_names or name2 in llm_names):
+                continue
+            if not run.model_vs_model and name1 in llm_names and name2 in llm_names:
                 continue
 
             orders = order_sequence(
@@ -200,7 +259,28 @@ def run_tournament(run) -> RunResult:
             result = play_match(game, make1(), make2(), num_rounds=run.rounds, orders=orders)
             results.append(result)
             rows.extend(_match_rows(result, game, run.mode))
+            thought_rows.extend(_thought_rows(result, game))
+
+            if match_counter % log_every == 0 or match_counter == total:
+                _LOGGER.info(
+                    "[%d/%d] %s: %s vs %s (%.0fs elapsed)",
+                    match_counter, total, game.name, name1, name2, time.monotonic() - start,
+                )
 
     rounds_csv = output_dir / "rounds.csv"
     pd.DataFrame(rows).to_csv(rounds_csv, index=False)
-    return RunResult(results=results, rounds_csv=rounds_csv, output_dir=output_dir)
+
+    thoughts_csv: Path | None = None
+    if thought_rows:
+        thoughts_csv = output_dir / "thoughts.csv"
+        pd.DataFrame(thought_rows).to_csv(thoughts_csv, index=False)
+
+    _LOGGER.info(
+        "Run '%s' FINISHED: %d matches, %d rounds in %.0fs -> %s%s",
+        run.name, match_counter, len(rows), time.monotonic() - start, rounds_csv,
+        f" (+ {thoughts_csv})" if thoughts_csv else "",
+    )
+
+    return RunResult(
+        results=results, rounds_csv=rounds_csv, output_dir=output_dir, thoughts_csv=thoughts_csv
+    )

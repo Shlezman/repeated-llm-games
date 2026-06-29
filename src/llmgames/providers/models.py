@@ -22,6 +22,8 @@ def build_chat_model(
     *,
     temperature: float = 0.0,
     max_tokens: int | None = None,
+    base_url: str | None = None,
+    timeout: float | None = None,
     mock_responses: Iterable[str] | None = None,
 ) -> BaseChatModel:
     """Builds a LangChain chat model from provider + model configuration.
@@ -31,6 +33,9 @@ def build_chat_model(
         model: The model identifier passed to the backend (config input).
         temperature: Sampling temperature (0.0 for the deterministic study runs).
         max_tokens: Optional max output tokens.
+        base_url: Optional API base URL for OpenAI-compatible gateways/proxies. The
+            API key is sourced from the environment by the integration, never here.
+        timeout: Optional per-call timeout (seconds) so a hung call fails fast.
         mock_responses: Canned replies for the "mock" provider (cycled).
 
     Returns:
@@ -46,5 +51,9 @@ def build_chat_model(
     kwargs: dict[str, object] = {"temperature": temperature}
     if max_tokens is not None:
         kwargs["max_tokens"] = max_tokens
+    if base_url:
+        kwargs["base_url"] = base_url
+    if timeout is not None:
+        kwargs["timeout"] = timeout
     model_provider = None if provider in _INFER else provider
     return init_chat_model(model, model_provider=model_provider, **kwargs)

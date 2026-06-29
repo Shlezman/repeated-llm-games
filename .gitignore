@@ -18,5 +18,13 @@ nb_results/
 .coverage
 htmlcov/
 
-# Run outputs (regenerated)
-results/
+# IDE
+.idea/
+.vscode/
+
+# Verification artifacts
+.playwright-mcp/
+replay_*preview.png
+
+# Run outputs (regenerated) — only the top-level results/, not docs/results/
+/results/

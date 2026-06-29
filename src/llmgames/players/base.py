@@ -94,6 +94,10 @@ class MatchResult:
         points_p2: Player 2's points each round.
         predictions_p1: Player 1's opponent predictions (None when not SCoT).
         predictions_p2: Player 2's opponent predictions (None when not SCoT).
+        thoughts_p1: Per-round reasoning capture for player 1 — dicts with keys
+            ``predicted`` (display label or None), ``predict_text``, ``decide_text``.
+            Empty for non-LLM players.
+        thoughts_p2: Per-round reasoning capture for player 2.
     """
 
     game: Game
@@ -105,6 +109,8 @@ class MatchResult:
     points_p2: tuple[int, ...]
     predictions_p1: tuple[Action | None, ...] = field(default_factory=tuple)
     predictions_p2: tuple[Action | None, ...] = field(default_factory=tuple)
+    thoughts_p1: tuple[dict, ...] = field(default_factory=tuple)
+    thoughts_p2: tuple[dict, ...] = field(default_factory=tuple)
 
     def _valid_total(self, points: tuple[int, ...]) -> int:
         """Sums points over rounds where both players' actions are valid.

@@ -65,6 +65,8 @@ def play_match(
     points_p2: list[int] = []
     preds_p1: list[Action | None] = []
     preds_p2: list[Action | None] = []
+    thoughts_p1: list[dict] = []
+    thoughts_p2: list[dict] = []
 
     for rnd in range(1, num_rounds + 1):
         order = orders[rnd - 1] if orders else ACTIONS
@@ -84,6 +86,8 @@ def play_match(
         action2 = player2.choose(view2)
         preds_p1.append(player1.predict_opponent(view1))
         preds_p2.append(player2.predict_opponent(view2))
+        thoughts_p1.append(_thoughts(player1))
+        thoughts_p2.append(_thoughts(player2))
 
         round_p1, round_p2 = score_round(game, action1, action2)
 
@@ -102,4 +106,12 @@ def play_match(
         points_p2=tuple(points_p2),
         predictions_p1=tuple(preds_p1),
         predictions_p2=tuple(preds_p2),
+        thoughts_p1=tuple(thoughts_p1),
+        thoughts_p2=tuple(thoughts_p2),
     )
+
+
+def _thoughts(player: Player) -> dict:
+    """Returns a player's last-round reasoning capture ({} if it has none)."""
+    getter = getattr(player, "last_thoughts", None)
+    return getter() if callable(getter) else {}

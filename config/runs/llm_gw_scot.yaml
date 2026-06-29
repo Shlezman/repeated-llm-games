@@ -1,0 +1,61 @@
+# SCoT (Social Chain-of-Thought) + reasoning capture, via the gateway.
+# Each model first PREDICTS the opponent's move, then chooses conditioned on it, and
+# explains its reasoning in one sentence — captured to thoughts.csv and shown in
+# game_replay.html. All 6 models (so each has a base + SCoT comparison) vs the two
+# baselines; model-vs-model is OFF to keep the SCoT+reasoning run affordable.
+name: llm_gw_scot
+rounds: 10
+seed: 42
+mode: scot
+reasoning: true
+self_play: true
+model_vs_model: false
+
+models:
+  - id: openai_heavy
+    provider: openai
+    model: ${LLM_GW_MODEL_1}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: openai_light
+    provider: openai
+    model: ${LLM_GW_MODEL_2}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: gemini_heavy
+    provider: openai
+    model: ${LLM_GW_MODEL_3}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: gemini_light
+    provider: openai
+    model: ${LLM_GW_MODEL_4}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: claude_heavy
+    provider: openai
+    model: ${LLM_GW_MODEL_5}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: claude_light
+    provider: openai
+    model: ${LLM_GW_MODEL_6}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+
+opponents:
+  - tit_for_tat
+  - always_defect
+
+games:
+  canonical: [pd, bos]
+
+robustness:
+  randomize_order: true
+  utility_label: points
+  cover_story: none
+
+cache:
+  backend: postgres
+
+output_dir: results
