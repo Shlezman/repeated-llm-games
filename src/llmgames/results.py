@@ -16,7 +16,11 @@ from .loop.tournament import RunResult
 from .metrics import bos_metrics, human, pd_metrics, prediction, score_ratio
 from .prompts.transforms import DEFAULT_LABELS
 from .viz import heatmaps, prediction_plots, trajectories
+from .viz.comparison import build_comparison
 from .viz.replay import generate_replay_html
+
+_PAPER_PD = Path("data/paper/pd.csv")
+_PAPER_BOS = Path("data/paper/bos.csv")
 
 _PD_NAME = "Prisoner's Dilemma"
 _BOS_NAME = "Battle of the Sexes"
@@ -194,11 +198,16 @@ def generate_results_md(run, run_result: RunResult) -> Path:
     fig_dir.mkdir(parents=True, exist_ok=True)
     results = run_result.results
 
+    comparison = None
+    if _PAPER_PD.exists() and _PAPER_BOS.exists():
+        scot_rounds = run_result.rounds_csv if run.mode == "scot" else None
+        comparison = build_comparison(_PAPER_PD, _PAPER_BOS, run_result.rounds_csv, scot_rounds)
     replay_html = generate_replay_html(
         run_result.rounds_csv,
         out_dir / "game_replay.html",
         run_name=run.name,
         thoughts_csv=run_result.thoughts_csv,
+        comparison=comparison,
     )
 
     sections = [

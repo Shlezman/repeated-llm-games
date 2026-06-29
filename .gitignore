@@ -24,7 +24,7 @@ htmlcov/
 
 # Verification artifacts
 .playwright-mcp/
-replay_*preview.png
+*_preview.png
 
 # Run outputs (regenerated) — only the top-level results/, not docs/results/
 /results/

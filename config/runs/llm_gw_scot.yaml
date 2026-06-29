@@ -1,15 +1,16 @@
 # SCoT (Social Chain-of-Thought) + reasoning capture, via the gateway.
 # Each model first PREDICTS the opponent's move, then chooses conditioned on it, and
 # explains its reasoning in one sentence — captured to thoughts.csv and shown in
-# game_replay.html. All 6 models (so each has a base + SCoT comparison) vs the two
-# baselines; model-vs-model is OFF to keep the SCoT+reasoning run affordable.
+# game_replay.html. Full round-robin (model_vs_model: true) so EVERY pairing is
+# evaluated in SCoT mode too (e.g. openai_heavy+scot vs gemini_heavy+scot). The
+# model-vs-strategy calls are already cached; only model-vs-model is new.
 name: llm_gw_scot
 rounds: 10
 seed: 42
 mode: scot
 reasoning: true
 self_play: true
-model_vs_model: false
+model_vs_model: true
 
 models:
   - id: openai_heavy

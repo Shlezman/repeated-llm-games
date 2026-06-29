@@ -125,6 +125,7 @@ def generate_replay_html(
     *,
     run_name: str = "",
     thoughts_csv=None,
+    comparison: dict | None = None,
 ) -> Path:
     """Generates the animated HTML replay, merging one or more runs.
 
@@ -175,6 +176,7 @@ def generate_replay_html(
         "payoffs": _PAYOFFS,
         "games": sorted(df["game_name"].unique().tolist()),
         "thoughts": _build_thoughts(tdf),
+        "comparison": comparison,
     }
     payload = json.dumps(data, separators=(",", ":"))
     document = _HTML_TEMPLATE.replace("/*__DATA__*/", payload).replace(
@@ -238,6 +240,21 @@ _HTML_TEMPLATE = r"""<!doctype html>
   code { background:#0f1722; padding:1px 6px; border-radius:5px; }
   .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; font-weight:700; }
   .pill.J { background:rgba(46,158,107,.2); color:#52c08a; } .pill.F { background:rgba(210,69,47,.2); color:#e0735f; }
+  .tabs { display:flex; gap:8px; margin-bottom:16px; }
+  .tab { background:#0f1722; border:1px solid #2a3440; color:var(--muted); padding:8px 14px; border-radius:8px; cursor:pointer; font:inherit; }
+  .tab.active { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  .tabpage[hidden] { display:none; }
+  .cmp-h { font-size:13px; color:var(--ink); margin:16px 0 8px; }
+  .cmprow { display:grid; grid-template-columns:170px 1fr 92px; gap:8px; align-items:center; margin:5px 0; font-size:12.5px; }
+  .cmprow .lab { color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cmptrack { background:#0f1722; border-radius:4px; height:16px; overflow:hidden; }
+  .cmpfill { height:100%; border-radius:4px; }
+  .cmpfill.paper { background:var(--line2); } .cmpfill.impl { background:var(--line1); }
+  .cmpval { text-align:right; font-variant-numeric:tabular-nums; color:var(--ink); }
+  .scotrow { display:grid; grid-template-columns:150px 1fr; gap:10px; align-items:center; margin:9px 0; font-size:12.5px; }
+  .scotbar { display:flex; align-items:center; gap:8px; margin:2px 0; }
+  .sb { height:13px; border-radius:3px; min-width:2px; } .sb.base { background:#5a6673; } .sb.scot { background:var(--coop); }
+  .legendrow { margin:4px 0 12px; color:var(--muted); font-size:12px; }
 </style>
 </head>
 <body>
@@ -245,6 +262,12 @@ _HTML_TEMPLATE = r"""<!doctype html>
   <h1>Repeated 2×2 games — model replay</h1>
   <p class="sub">Run <code>__RUN_NAME__</code> · choose the two players in the title dropdowns, press Play. <span class="pill J">J</span> = cooperate / P1-preferred · <span class="pill F">F</span> = the other option.</p>
 
+  <div class="tabs">
+    <button class="tab active" data-tab="replay">Replay</button>
+    <button class="tab" data-tab="compare" id="cmpTab">Paper vs Implementation</button>
+  </div>
+
+  <div id="tab-replay" class="tabpage">
   <div class="panel">
     <h2>Leaderboard (avg final score across matches)</h2>
     <table id="leaderboard"><thead><tr><th>#</th><th>Player</th><th>Matches</th><th>Avg final score</th><th>Cooperation (J)</th></tr></thead><tbody></tbody></table>
@@ -284,6 +307,21 @@ _HTML_TEMPLATE = r"""<!doctype html>
     <div class="legend" id="legend"></div>
     <div class="thoughts" id="thoughts"></div>
   </div>
+  </div><!-- /tab-replay -->
+
+  <div id="tab-compare" class="tabpage" hidden>
+    <div class="panel">
+      <h2>Paper vs Implementation — score ratio</h2>
+      <p class="sub" style="margin:0 0 6px">Same metric (achieved / best-achievable given the opponent), computed on the paper's released data (Akata et al. 2025) and on this run. <b style="color:var(--line2)">paper</b> · <b style="color:var(--line1)">this run</b>.</p>
+      <h3 class="cmp-h">Prisoner's Dilemma</h3><div id="cmp-pd"></div>
+      <h3 class="cmp-h">Battle of the Sexes</h3><div id="cmp-bos"></div>
+    </div>
+    <div class="panel">
+      <h2>SCoT effect on coordination (Battle of the Sexes)</h2>
+      <p class="sub" style="margin:0 0 10px">base → SCoT (predict-then-act). The paper found GPT-4 0.61 → 0.91; every model here improves too.</p>
+      <div id="cmp-scot"></div>
+    </div>
+  </div><!-- /tab-compare -->
 </div>
 
 <script>
@@ -399,6 +437,30 @@ $("play").onclick=play;
 $("step").onclick=()=>{ stop(); step(); };
 $("reset").onclick=()=>{ stop(); render(0); };
 $("scrub").oninput=(e)=>{ stop(); render(+e.target.value); };
+
+// --- Tabs + paper-vs-implementation comparison ---
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x===b));
+  $("tab-replay").hidden = b.dataset.tab!=='replay';
+  $("tab-compare").hidden = b.dataset.tab!=='compare';
+});
+function ratioRows(items, cls){
+  return items.map(it=>`<div class="cmprow"><div class="lab">${it.label}</div><div class="cmptrack"><div class="cmpfill ${cls}" style="width:${(it.ratio*100).toFixed(0)}%"></div></div><div class="cmpval">${it.ratio.toFixed(2)}</div></div>`).join("");
+}
+function renderComparison(){
+  const c = DATA.comparison;
+  if(!c){ $("cmpTab").style.display="none"; return; }
+  $("cmp-pd").innerHTML  = ratioRows(c.pd.paper,"paper")  + ratioRows(c.pd.impl,"impl");
+  $("cmp-bos").innerHTML = ratioRows(c.bos.paper,"paper") + ratioRows(c.bos.impl,"impl");
+  $("cmp-scot").innerHTML = (c.scot_bos||[]).map(s=>{
+    const d=s.scot-s.base;
+    return `<div class="scotrow"><div class="lab">${s.label}</div><div>
+      <div class="scotbar"><div class="sb base" style="width:${(s.base*100).toFixed(0)}%"></div><span class="cmpval">base ${s.base.toFixed(2)}</span></div>
+      <div class="scotbar"><div class="sb scot" style="width:${(s.scot*100).toFixed(0)}%"></div><span class="cmpval">SCoT ${s.scot.toFixed(2)} (${d>=0?'+':''}${d.toFixed(2)})</span></div>
+    </div></div>`;
+  }).join("");
+}
+renderComparison();
 
 fillSelect($("gameSel"), DATA.games);
 fillSelect($("n1"), DATA.players, DATA.players[0]);

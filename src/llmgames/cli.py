@@ -16,7 +16,26 @@ from .config.loader import load_run_spec
 from .config.schema import RunSpec
 from .loop.tournament import run_tournament
 from .results import generate_results_md
+from .viz.comparison import build_comparison
 from .viz.replay import generate_replay_html
+
+_PAPER_PD = Path("data/paper/pd.csv")
+_PAPER_BOS = Path("data/paper/bos.csv")
+
+
+def _maybe_comparison(rounds: list[Path]) -> dict | None:
+    """Builds the paper-vs-implementation comparison if the paper data is present.
+
+    Args:
+        rounds: Round CSVs; the first is treated as the base run, a second as SCoT.
+
+    Returns:
+        The comparison dict, or None when paper data is unavailable.
+    """
+    if not (_PAPER_PD.exists() and _PAPER_BOS.exists()):
+        return None
+    scot = rounds[1] if len(rounds) > 1 else None
+    return build_comparison(_PAPER_PD, _PAPER_BOS, rounds[0], scot)
 
 
 def _force_mock(run: RunSpec) -> RunSpec:
@@ -51,7 +70,7 @@ def _cmd_replay(args: argparse.Namespace) -> None:
     rounds = [Path(r) for r in args.rounds]
     out = Path(args.out) if args.out else rounds[0].with_name("game_replay.html")
     name = args.name or (rounds[0].parent.name if len(rounds) == 1 else "combined")
-    path = generate_replay_html(rounds, out, run_name=name)
+    path = generate_replay_html(rounds, out, run_name=name, comparison=_maybe_comparison(rounds))
     print(f"Replay: {path}")
 
 

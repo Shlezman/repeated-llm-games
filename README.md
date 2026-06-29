@@ -91,9 +91,12 @@ replication of its exact model set. Swap the model list in config to test any mo
 
 ▶ **Watch it:** open the committed [`docs/results/game_replay.html`](docs/results/game_replay.html)
 — every model appears in **both modes** (`openai_heavy` and `openai_heavy+scot`, …); pick
-two players, press Play, and read each model's per-round prediction + reasoning. Full
-artifacts (Table 1, heat maps, prediction-accuracy plot) are under
-[`docs/results/`](docs/results/) for the base and SCoT runs.
+two players, press Play, and read each model's per-round prediction + reasoning. Its
+**"Paper vs Implementation"** tab charts our score ratios against the **paper's own
+released numbers** (computed with the same metric) — PD capability ladder, BoS, and the
+per-model base→SCoT lift. Full per-finding writeup:
+[`docs/results/PAPER_COMPARISON.md`](docs/results/PAPER_COMPARISON.md); base + SCoT
+artifacts under [`docs/results/`](docs/results/).
 
 ## Install
 
