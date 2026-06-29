@@ -328,6 +328,19 @@ _HTML_TEMPLATE = r"""<!doctype html>
 const DATA = /*__DATA__*/;
 const $ = (id) => document.getElementById(id);
 
+// Valid pairings index: game -> player1 -> [player2...], so the selectors only ever
+// offer matchups that were actually played (no dead-end "no match" selections).
+const PAIRS = {};
+DATA.matches.forEach((m) => {
+  PAIRS[m.game] = PAIRS[m.game] || {};
+  PAIRS[m.game][m.p1] = PAIRS[m.game][m.p1] || [];
+  PAIRS[m.game][m.p1].push(m.p2);
+});
+const p1sFor = (g) => Object.keys(PAIRS[g] || {}).sort();
+const p2sFor = (g, p1) => ((PAIRS[g] || {})[p1] || []).slice().sort();
+function refreshN1() { const g = $("gameSel").value, cur = $("n1").value, o = p1sFor(g); fillSelect($("n1"), o, o.includes(cur) ? cur : o[0]); }
+function refreshN2() { const g = $("gameSel").value, p1 = $("n1").value, cur = $("n2").value, o = p2sFor(g, p1); fillSelect($("n2"), o, o.includes(cur) ? cur : o[0]); }
+
 (function(){
   const tb = $("leaderboard").querySelector("tbody");
   DATA.leaderboard.forEach((r,i)=>{
@@ -430,8 +443,8 @@ function play(){ if(timer) return stop(); if(!current) return; if(round>=current
   $("play").textContent="❚❚ Pause"; timer=setInterval(()=>{ if(round>=current.rounds.length) return stop(); step(); }, +$("speed").value); }
 function stop(){ if(timer){ clearInterval(timer); timer=null; } $("play").textContent="▶ Play"; }
 
-$("gameSel").onchange=loadMatch;
-$("n1").onchange=loadMatch;
+$("gameSel").onchange=()=>{ refreshN1(); refreshN2(); loadMatch(); };
+$("n1").onchange=()=>{ refreshN2(); loadMatch(); };
 $("n2").onchange=loadMatch;
 $("play").onclick=play;
 $("step").onclick=()=>{ stop(); step(); };
@@ -463,8 +476,8 @@ function renderComparison(){
 renderComparison();
 
 fillSelect($("gameSel"), DATA.games);
-fillSelect($("n1"), DATA.players, DATA.players[0]);
-fillSelect($("n2"), DATA.players, DATA.players[1] || DATA.players[0]);
+refreshN1();
+refreshN2();
 loadMatch();
 </script>
 </body>
