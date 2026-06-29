@@ -1,0 +1,60 @@
+# Six gateway models playing each other (and hand-coded opponents) via the internal
+# LLM gateway (Bifrost, OpenAI-compatible). 2 per provider: heavy + light.
+# Set in .env: OPENAI_API_KEY, LLM_GW_BASE_URL, and LLM_GW_MODEL_1..6 (ids the
+# stg gateway serves — see config-stg-eu-west-1.json). Uses the Postgres cache
+# (DATABASE_URL), so run via docker compose (scripts/run-local.sh).
+name: llm_gw_multi
+rounds: 10
+seed: 42
+mode: base
+
+models:
+  - id: openai_heavy
+    provider: openai
+    model: ${LLM_GW_MODEL_1}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: openai_light
+    provider: openai
+    model: ${LLM_GW_MODEL_2}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: gemini_heavy
+    provider: openai
+    model: ${LLM_GW_MODEL_3}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: gemini_light
+    provider: openai
+    model: ${LLM_GW_MODEL_4}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: claude_heavy
+    provider: openai
+    model: ${LLM_GW_MODEL_5}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: claude_light
+    provider: openai
+    model: ${LLM_GW_MODEL_6}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+
+# Each model plays every other model + itself + these baselines (self_play: true).
+opponents:
+  - tit_for_tat
+  - always_defect
+self_play: true
+
+games:
+  canonical: [pd, bos]
+
+robustness:
+  randomize_order: true
+  utility_label: points
+  cover_story: none
+
+cache:
+  backend: postgres   # uses DATABASE_URL (provided by docker compose)
+
+output_dir: results

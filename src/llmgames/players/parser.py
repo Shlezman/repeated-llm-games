@@ -33,6 +33,10 @@ def extract_action(reply: str, action_labels: dict[Action, str]) -> Action | Non
     "F" in "refuse") are deliberately ignored to avoid false positives; if no
     standalone label is present the reply is treated as unparseable.
 
+    When the reply contains a ``CHOICE:``/``ANSWER:`` marker (reasoning mode, where
+    the model explains first then states its pick), only the text after the last
+    such marker is scanned, so labels mentioned in the rationale are ignored.
+
     Args:
         reply: Raw model output text.
         action_labels: Internal-action to display-label mapping for this round.
@@ -45,6 +49,11 @@ def extract_action(reply: str, action_labels: dict[Action, str]) -> Action | Non
 
     lookup = _label_to_action(action_labels)
     upper = reply.upper()
+
+    # Reasoning mode: scan only after the final explicit choice marker.
+    marker = max(upper.rfind("CHOICE:"), upper.rfind("ANSWER:"))
+    if marker != -1:
+        upper = upper[marker:]
 
     # Choose the label that appears earliest as a standalone token (word boundary).
     best_pos: int | None = None

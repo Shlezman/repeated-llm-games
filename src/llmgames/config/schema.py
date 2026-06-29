@@ -19,10 +19,13 @@ class ParamsSpec(BaseModel):
     Attributes:
         temperature: Sampling temperature; 0.0 for deterministic study runs.
         max_tokens: Max output tokens (kept small but >1 so chat models can answer).
+        request_timeout: Per-call timeout in seconds. A hung/slow gateway call fails
+            fast and becomes an unparseable round instead of freezing the run.
     """
 
     temperature: float = 0.0
     max_tokens: int = 8
+    request_timeout: float = 30.0
 
 
 class ModelSpec(BaseModel):
@@ -31,15 +34,19 @@ class ModelSpec(BaseModel):
     Attributes:
         id: Stable label used in results (e.g. "model_a").
         provider: LangChain backend selector ("openai", "anthropic", "auto", "mock",
-            ...). "auto" lets LangChain infer the provider from the model id.
+            ...). "auto" lets LangChain infer the provider from the model id. Use
+            "openai" for an OpenAI-compatible gateway (e.g. the internal llm-gw).
         model: The model identifier passed to the backend. Required — never
             defaulted — so no model name is ever implied by code.
+        base_url: Optional API base URL for OpenAI-compatible gateways/proxies. The
+            API key is read from the environment by the integration (never here).
         params: Generation parameters.
     """
 
     id: str
     provider: str = "auto"
     model: str
+    base_url: str | None = None
     params: ParamsSpec = Field(default_factory=ParamsSpec)
 
 
@@ -98,9 +105,13 @@ class RunSpec(BaseModel):
         rounds: Rounds per match (paper default: 10).
         seed: Master seed for all randomized arms.
         mode: "base" or "scot" (Social Chain-of-Thought).
+        reasoning: If true, prompts ask the model to explain briefly before choosing;
+            the rationale is captured to thoughts.csv and shown in the replay.
         models: Models under test (>= 1).
         opponents: Hand-coded strategy names to include as opponents.
         self_play: Whether models also play against each other / themselves.
+        model_vs_model: If false, skip LLM-vs-LLM matches (models play only the
+            hand-coded strategies) — useful to keep SCoT/reasoning runs affordable.
         games: Which games to run.
         robustness: Robustness transforms.
         cache: Cache backend configuration.
@@ -111,9 +122,11 @@ class RunSpec(BaseModel):
     rounds: int = 10
     seed: int = 42
     mode: Literal["base", "scot"] = "base"
+    reasoning: bool = False
     models: list[ModelSpec] = Field(min_length=1)
     opponents: list[str] = Field(default_factory=list)
     self_play: bool = True
+    model_vs_model: bool = True
     games: GameSelector = Field(default_factory=GameSelector)
     robustness: RobustnessSpec = Field(default_factory=RobustnessSpec)
     cache: CacheSpec = Field(default_factory=CacheSpec)

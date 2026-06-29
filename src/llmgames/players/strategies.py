@@ -148,6 +148,10 @@ class StrategyPlayer:
         """Hand-coded strategies do not predict; always returns None."""
         return None
 
+    def last_thoughts(self) -> dict:
+        """Hand-coded strategies have no reasoning to report."""
+        return {}
+
 
 def make_strategy(name: str, seed: int = 0) -> StrategyPlayer:
     """Builds a :class:`StrategyPlayer` by registered name.

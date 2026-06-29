@@ -1,0 +1,55 @@
+# Local stack: Postgres (TLS) + the llmgames app. Run via scripts/run-local.sh,
+# or: docker compose run --build --rm app run --config config/runs/llm_gw_multi.yaml
+# Requires .env (cp .env.example .env) with the gateway key/url/models.
+
+services:
+  db:
+    build:
+      context: .
+      dockerfile: docker/postgres.Dockerfile
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-llmgames}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-llmgames}
+      POSTGRES_DB: ${POSTGRES_DB:-llmgames}
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/etc/postgresql/server.crt
+      - -c
+      - ssl_key_file=/etc/postgresql/server.key
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-llmgames} -d ${POSTGRES_DB:-llmgames}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    # Run as the host user so writes to the ./results bind mount succeed on any
+    # host (the image-layer chown is masked by the bind mount). run-local.sh
+    # exports UID/GID; defaults to the image's app user (1000) otherwise.
+    user: "${UID:-1000}:${GID:-1000}"
+    env_file:
+      - .env
+    environment:
+      # App -> db over the internal network, TLS-encrypted (sslmode=require).
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-llmgames}:${POSTGRES_PASSWORD:-llmgames}@db:5432/${POSTGRES_DB:-llmgames}
+      PGSSLMODE: require
+      MPLBACKEND: Agg
+      MPLCONFIGDIR: /tmp/mpl   # writable regardless of the runtime uid's HOME
+    volumes:
+      # Results (rounds.csv, results.md, figures) are written back to the host.
+      - ./results:/app/results
+    command: ["run", "--config", "config/runs/llm_gw_multi.yaml"]
+
+volumes:
+  pgdata:
