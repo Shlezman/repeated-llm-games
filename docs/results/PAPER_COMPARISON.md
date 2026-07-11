@@ -164,6 +164,6 @@ progress, not contradicted.
 
 The SCoT run used `model_vs_model: false` (models played only the hand-coded
 strategies) to bound cost, so **SCoT model-vs-model matches are not yet evaluated**
-(you cannot replay e.g. `openai_heavy+scot` vs `gemini_heavy+scot`). Running
+(you cannot replay e.g. `gpt-4.1+scot` vs `gemini-3.1-pro-preview+scot`). Running
 `config/runs/llm_gw_scot.yaml` with `model_vs_model: true` completes the matrix; this
 file will be updated with those results.

@@ -43,12 +43,12 @@ artifacts (heat maps, trajectories, `game_replay.html`) land in `results/llm_gw_
 |---|---|---|
 | tit_for_tat (baseline) | 0.80 | **0.92** |
 | always_defect (baseline) | **1.00** | 0.88 |
-| openai_heavy (gpt-4.1) | 0.83 | 0.68 |
-| openai_light (gpt-4.1-mini) | 0.84 | 0.69 |
-| gemini_heavy (gemini-3.1-pro) | 0.83 | 0.83 |
-| gemini_light (gemini-3.1-flash-lite) | 0.80 | 0.77 |
-| claude_heavy (claude-opus-4-6) | 0.81 | 0.84 |
-| claude_light (claude-haiku-4-5) | 0.81 | 0.80 |
+| gpt-4.1 | 0.83 | 0.68 |
+| gpt-4.1-mini | 0.84 | 0.69 |
+| gemini-3.1-pro-preview | 0.83 | 0.83 |
+| gemini-3.1-flash-lite | 0.80 | 0.77 |
+| claude-opus-4-6 | 0.81 | 0.84 |
+| claude-haiku-4-5 | 0.81 | 0.80 |
 
 The paper used GPT-3/3.5/4 (+ Claude, Llama-2); we use modern models, so absolute
 numbers differ. Comparing the **qualitative findings**:
@@ -68,12 +68,12 @@ the Sexes) for every model** — the exact failure mode the paper identified:
 
 | model | PD: base → SCoT | BoS: base → SCoT |
 |---|---|---|
-| openai_heavy (gpt-4.1) | 0.83 → **1.00** | 0.68 → **0.93** |
-| openai_light (gpt-4.1-mini) | 0.84 → **1.00** | 0.69 → **0.95** |
-| gemini_heavy (gemini-3.1-pro) | 0.83 → 0.93 | 0.83 → **0.92** |
-| gemini_light (gemini-3.1-flash-lite) | 0.80 → **1.00** | 0.77 → **0.92** |
-| claude_heavy (claude-opus-4-6) | 0.81 → **1.00** | 0.84 → 0.89 |
-| claude_light (claude-haiku-4-5) | 0.81 → 0.81 | 0.80 → **0.96** |
+| gpt-4.1 | 0.83 → **1.00** | 0.68 → **0.93** |
+| gpt-4.1-mini | 0.84 → **1.00** | 0.69 → **0.95** |
+| gemini-3.1-pro-preview | 0.83 → 0.93 | 0.83 → **0.92** |
+| gemini-3.1-flash-lite | 0.80 → **1.00** | 0.77 → **0.92** |
+| claude-opus-4-6 | 0.81 → **1.00** | 0.84 → 0.89 |
+| claude-haiku-4-5 | 0.81 → 0.81 | 0.80 → **0.96** |
 
 SCoT **theory-of-mind prediction accuracy: 0.88–0.94** (models reliably anticipate the
 baseline opponents). The captured reasoning makes the paper's "exploit-then-can't-recover"
@@ -90,7 +90,7 @@ prompts, hand-coded strategies, SCoT, robustness transforms, metrics) — not a
 replication of its exact model set. Swap the model list in config to test any models.
 
 ▶ **Watch it:** open the committed [`docs/results/game_replay.html`](docs/results/game_replay.html)
-— every model appears in **both modes** (`openai_heavy` and `openai_heavy+scot`, …); pick
+— every model appears in **both modes** (`gpt-4.1` and `gpt-4.1+scot`, …); pick
 two players, press Play, and read each model's per-round prediction + reasoning. Its
 **"Paper vs Implementation"** tab charts our score ratios against the **paper's own
 released numbers** (computed with the same metric) — PD capability ladder, BoS, and the

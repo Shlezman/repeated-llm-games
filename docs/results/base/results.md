@@ -14,12 +14,12 @@ Reproduction of Akata et al. (2025), *Playing repeated games with large language
 - **Opponents**: tit_for_tat, always_defect
 - **Robustness**: order_randomized=True, unit=points, cover_story=none, labels=J/F
 - **Models**:
-- `openai_heavy` — provider `openai`, model `gpt-4.1`, temp 0.0
-- `openai_light` — provider `openai`, model `gpt-4.1-mini`, temp 0.0
-- `gemini_heavy` — provider `openai`, model `gemini-3.1-pro-preview`, temp 0.0
-- `gemini_light` — provider `openai`, model `gemini-3.1-flash-lite`, temp 0.0
-- `claude_heavy` — provider `openai`, model `claude-opus-4-6`, temp 0.0
-- `claude_light` — provider `openai`, model `claude-haiku-4-5`, temp 0.0
+- `gpt-4.1` — provider `openai`, model `gpt-4.1`, temp 0.0
+- `gpt-4.1-mini` — provider `openai`, model `gpt-4.1-mini`, temp 0.0
+- `gemini-3.1-pro-preview` — provider `openai`, model `gemini-3.1-pro-preview`, temp 0.0
+- `gemini-3.1-flash-lite` — provider `openai`, model `gemini-3.1-flash-lite`, temp 0.0
+- `claude-opus-4-6` — provider `openai`, model `claude-opus-4-6`, temp 0.0
+- `claude-haiku-4-5` — provider `openai`, model `claude-haiku-4-5`, temp 0.0
 
 
 ## Payoff matrices
@@ -45,18 +45,18 @@ Reproduction of Akata et al. (2025), *Playing repeated games with large language
 | --- | --- | --- | --- |
 | always_defect | BoS | 0.882 | 16 |
 | always_defect | PD Family | 1.000 | 16 |
-| claude_heavy | BoS | 0.836 | 16 |
-| claude_heavy | PD Family | 0.809 | 16 |
-| claude_light | BoS | 0.795 | 16 |
-| claude_light | PD Family | 0.809 | 16 |
-| gemini_heavy | BoS | 0.828 | 16 |
-| gemini_heavy | PD Family | 0.828 | 16 |
-| gemini_light | BoS | 0.772 | 16 |
-| gemini_light | PD Family | 0.802 | 16 |
-| openai_heavy | BoS | 0.675 | 16 |
-| openai_heavy | PD Family | 0.833 | 16 |
-| openai_light | BoS | 0.687 | 16 |
-| openai_light | PD Family | 0.841 | 16 |
+| claude-opus-4-6 | BoS | 0.836 | 16 |
+| claude-opus-4-6 | PD Family | 0.809 | 16 |
+| claude-haiku-4-5 | BoS | 0.795 | 16 |
+| claude-haiku-4-5 | PD Family | 0.809 | 16 |
+| gemini-3.1-pro-preview | BoS | 0.828 | 16 |
+| gemini-3.1-pro-preview | PD Family | 0.828 | 16 |
+| gemini-3.1-flash-lite | BoS | 0.772 | 16 |
+| gemini-3.1-flash-lite | PD Family | 0.802 | 16 |
+| gpt-4.1 | BoS | 0.675 | 16 |
+| gpt-4.1 | PD Family | 0.833 | 16 |
+| gpt-4.1-mini | BoS | 0.687 | 16 |
+| gpt-4.1-mini | PD Family | 0.841 | 16 |
 | tit_for_tat | BoS | 0.920 | 16 |
 | tit_for_tat | PD Family | 0.802 | 16 |
 

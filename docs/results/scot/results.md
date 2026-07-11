@@ -14,12 +14,12 @@ Reproduction of Akata et al. (2025), *Playing repeated games with large language
 - **Opponents**: tit_for_tat, always_defect
 - **Robustness**: order_randomized=True, unit=points, cover_story=none, labels=J/F
 - **Models**:
-- `openai_heavy` — provider `openai`, model `gpt-4.1`, temp 0.0
-- `openai_light` — provider `openai`, model `gpt-4.1-mini`, temp 0.0
-- `gemini_heavy` — provider `openai`, model `gemini-3.1-pro-preview`, temp 0.0
-- `gemini_light` — provider `openai`, model `gemini-3.1-flash-lite`, temp 0.0
-- `claude_heavy` — provider `openai`, model `claude-opus-4-6`, temp 0.0
-- `claude_light` — provider `openai`, model `claude-haiku-4-5`, temp 0.0
+- `gpt-4.1` — provider `openai`, model `gpt-4.1`, temp 0.0
+- `gpt-4.1-mini` — provider `openai`, model `gpt-4.1-mini`, temp 0.0
+- `gemini-3.1-pro-preview` — provider `openai`, model `gemini-3.1-pro-preview`, temp 0.0
+- `gemini-3.1-flash-lite` — provider `openai`, model `gemini-3.1-flash-lite`, temp 0.0
+- `claude-opus-4-6` — provider `openai`, model `claude-opus-4-6`, temp 0.0
+- `claude-haiku-4-5` — provider `openai`, model `claude-haiku-4-5`, temp 0.0
 
 
 ## Payoff matrices
@@ -45,18 +45,18 @@ Reproduction of Akata et al. (2025), *Playing repeated games with large language
 | --- | --- | --- | --- |
 | always_defect | BoS | 0.923 | 16 |
 | always_defect | PD Family | 1.000 | 16 |
-| claude_heavy+scot | BoS | 0.885 | 4 |
-| claude_heavy+scot | PD Family | 1.000 | 4 |
-| claude_light+scot | BoS | 0.957 | 4 |
-| claude_light+scot | PD Family | 0.808 | 4 |
-| gemini_heavy+scot | BoS | 0.916 | 4 |
-| gemini_heavy+scot | PD Family | 0.933 | 4 |
-| gemini_light+scot | BoS | 0.923 | 4 |
-| gemini_light+scot | PD Family | 1.000 | 4 |
-| openai_heavy+scot | BoS | 0.932 | 4 |
-| openai_heavy+scot | PD Family | 1.000 | 4 |
-| openai_light+scot | BoS | 0.950 | 4 |
-| openai_light+scot | PD Family | 1.000 | 4 |
+| claude-opus-4-6+scot | BoS | 0.885 | 4 |
+| claude-opus-4-6+scot | PD Family | 1.000 | 4 |
+| claude-haiku-4-5+scot | BoS | 0.957 | 4 |
+| claude-haiku-4-5+scot | PD Family | 0.808 | 4 |
+| gemini-3.1-pro-preview+scot | BoS | 0.916 | 4 |
+| gemini-3.1-pro-preview+scot | PD Family | 0.933 | 4 |
+| gemini-3.1-flash-lite+scot | BoS | 0.923 | 4 |
+| gemini-3.1-flash-lite+scot | PD Family | 1.000 | 4 |
+| gpt-4.1+scot | BoS | 0.932 | 4 |
+| gpt-4.1+scot | PD Family | 1.000 | 4 |
+| gpt-4.1-mini+scot | BoS | 0.950 | 4 |
+| gpt-4.1-mini+scot | PD Family | 1.000 | 4 |
 | tit_for_tat | BoS | 0.928 | 16 |
 | tit_for_tat | PD Family | 0.874 | 16 |
 
@@ -80,12 +80,12 @@ Reproduction of Akata et al. (2025), *Playing repeated games with large language
 
 | player | accuracy | n_predictions |
 | --- | --- | --- |
-| claude_heavy+scot | 0.912 | 80 |
-| claude_light+scot | 0.875 | 80 |
-| gemini_heavy+scot | 0.938 | 80 |
-| gemini_light+scot | 0.938 | 80 |
-| openai_heavy+scot | 0.925 | 80 |
-| openai_light+scot | 0.900 | 80 |
+| claude-opus-4-6+scot | 0.912 | 80 |
+| claude-haiku-4-5+scot | 0.875 | 80 |
+| gemini-3.1-pro-preview+scot | 0.938 | 80 |
+| gemini-3.1-flash-lite+scot | 0.938 | 80 |
+| gpt-4.1+scot | 0.925 | 80 |
+| gpt-4.1-mini+scot | 0.900 | 80 |
 
 ![Prediction accuracy](figures/prediction_accuracy.png)
 
