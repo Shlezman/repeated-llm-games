@@ -2,7 +2,7 @@
 # Each model first PREDICTS the opponent's move, then chooses conditioned on it, and
 # explains its reasoning in one sentence — captured to thoughts.csv and shown in
 # game_replay.html. Full round-robin (model_vs_model: true) so EVERY pairing is
-# evaluated in SCoT mode too (e.g. openai_heavy+scot vs gemini_heavy+scot). The
+# evaluated in SCoT mode too (e.g. gpt-4.1+scot vs gemini-3.1-pro-preview+scot). The
 # model-vs-strategy calls are already cached; only model-vs-model is new.
 name: llm_gw_scot
 rounds: 10
@@ -13,32 +13,32 @@ self_play: true
 model_vs_model: true
 
 models:
-  - id: openai_heavy
+  - id: gpt-4.1
     provider: openai
     model: ${LLM_GW_MODEL_1}
     base_url: ${LLM_GW_BASE_URL}
     params: { temperature: 0.0, max_tokens: 2048 }
-  - id: openai_light
+  - id: gpt-4.1-mini
     provider: openai
     model: ${LLM_GW_MODEL_2}
     base_url: ${LLM_GW_BASE_URL}
     params: { temperature: 0.0, max_tokens: 2048 }
-  - id: gemini_heavy
+  - id: gemini-3.1-pro-preview
     provider: openai
     model: ${LLM_GW_MODEL_3}
     base_url: ${LLM_GW_BASE_URL}
     params: { temperature: 0.0, max_tokens: 2048 }
-  - id: gemini_light
+  - id: gemini-3.1-flash-lite
     provider: openai
     model: ${LLM_GW_MODEL_4}
     base_url: ${LLM_GW_BASE_URL}
     params: { temperature: 0.0, max_tokens: 2048 }
-  - id: claude_heavy
+  - id: claude-opus-4-6
     provider: openai
     model: ${LLM_GW_MODEL_5}
     base_url: ${LLM_GW_BASE_URL}
     params: { temperature: 0.0, max_tokens: 2048 }
-  - id: claude_light
+  - id: claude-haiku-4-5
     provider: openai
     model: ${LLM_GW_MODEL_6}
     base_url: ${LLM_GW_BASE_URL}
