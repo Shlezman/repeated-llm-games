@@ -113,6 +113,46 @@ def _build_thoughts(tdf: pd.DataFrame | None) -> dict:
     return out
 
 
+_ARM_LABELS = {
+    "framing": "Framing invariance",
+    "payoff_sweep": "BoS payoff sweep",
+    "ending_prob": "PD ending probability",
+}
+
+
+def build_robustness(robustness_csv) -> dict | None:
+    """Builds the robustness-tab payload from a robustness.csv, or None if absent.
+
+    Args:
+        robustness_csv: Path to a run's robustness.csv (long: arm, variant, model,
+            game, metric, value).
+
+    Returns:
+        ``{"arms": [{"arm", "matrices": [{"title", "rows", "cols", "cells"}]}]}`` or None.
+    """
+    if not robustness_csv or not Path(robustness_csv).exists():
+        return None
+    df = pd.read_csv(robustness_csv)
+    arms = []
+    for arm in ["framing", "payoff_sweep", "ending_prob"]:
+        sub = df[df["arm"] == arm]
+        if sub.empty:
+            continue
+        matrices = []
+        for (game, metric), grp in sub.groupby(["game", "metric"], sort=False):
+            cols = list(dict.fromkeys(grp["variant"]))
+            rows = list(dict.fromkeys(grp["model"]))
+            cells = {m: {} for m in rows}
+            for r in grp.itertuples():
+                cells[r.model][r.variant] = round(float(r.value), 3)
+            matrices.append({
+                "title": f"{game} — {metric.replace('_', ' ')}",
+                "rows": rows, "cols": cols, "cells": cells,
+            })
+        arms.append({"arm": _ARM_LABELS.get(arm, arm), "matrices": matrices})
+    return {"arms": arms}
+
+
 def _as_paths(value) -> list[Path]:
     """Normalizes a path or list of paths into a list of :class:`Path`."""
     items = value if isinstance(value, (list, tuple)) else [value]
@@ -126,6 +166,7 @@ def generate_replay_html(
     run_name: str = "",
     thoughts_csv=None,
     comparison: dict | None = None,
+    robustness_csv=None,
 ) -> Path:
     """Generates the animated HTML replay, merging one or more runs.
 
@@ -177,6 +218,7 @@ def generate_replay_html(
         "games": sorted(df["game_name"].unique().tolist()),
         "thoughts": _build_thoughts(tdf),
         "comparison": comparison,
+        "robustness": build_robustness(robustness_csv),
     }
     payload = json.dumps(data, separators=(",", ":"))
     document = _HTML_TEMPLATE.replace("/*__DATA__*/", payload).replace(
@@ -255,6 +297,11 @@ _HTML_TEMPLATE = r"""<!doctype html>
   .scotbar { display:flex; align-items:center; gap:8px; margin:2px 0; }
   .sb { height:13px; border-radius:3px; min-width:2px; } .sb.base { background:#5a6673; } .sb.scot { background:var(--coop); }
   .legendrow { margin:4px 0 12px; color:var(--muted); font-size:12px; }
+.matrix{border-collapse:collapse;margin:6px 0 20px;font-size:13px}
+.matrix th,.matrix td{border:1px solid #2a2a3a;padding:5px 10px;text-align:center}
+.matrix th{color:var(--muted);font-weight:600}
+.matrix .rlab{text-align:left;color:#e8e8f0;white-space:nowrap}
+.rcell{font-variant-numeric:tabular-nums;color:#0b0b12;font-weight:600}
 </style>
 </head>
 <body>
@@ -265,6 +312,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
   <div class="tabs">
     <button class="tab active" data-tab="replay">Replay</button>
     <button class="tab" data-tab="compare" id="cmpTab">Paper vs Implementation</button>
+    <button class="tab" data-tab="robust" id="robTab">Robustness</button>
   </div>
 
   <div id="tab-replay" class="tabpage">
@@ -322,6 +370,11 @@ _HTML_TEMPLATE = r"""<!doctype html>
       <div id="cmp-scot"></div>
     </div>
   </div><!-- /tab-compare -->
+
+  <div id="tab-robust" class="tabpage" hidden>
+    <p class="sub" style="margin:0 0 4px">Does a finding survive a change in wording, payoffs, or horizon? Each cell is a rate (0–1); greener = higher. In the framing arm a row should stay ~constant across columns if the behaviour is robust to prompt wording.</p>
+    <div id="robBody"></div>
+  </div><!-- /tab-robust -->
 </div>
 
 <script>
@@ -456,6 +509,7 @@ document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x===b));
   $("tab-replay").hidden = b.dataset.tab!=='replay';
   $("tab-compare").hidden = b.dataset.tab!=='compare';
+  $("tab-robust").hidden = b.dataset.tab!=='robust';
 });
 function ratioRows(items, cls){
   return items.map(it=>`<div class="cmprow"><div class="lab">${it.label}</div><div class="cmptrack"><div class="cmpfill ${cls}" style="width:${(it.ratio*100).toFixed(0)}%"></div></div><div class="cmpval">${it.ratio.toFixed(2)}</div></div>`).join("");
@@ -474,6 +528,19 @@ function renderComparison(){
   }).join("");
 }
 renderComparison();
+
+function robCell(v){ return `<td class="rcell" style="background:rgba(46,160,67,${(0.1+0.55*v).toFixed(3)})">${v.toFixed(2)}</td>`; }
+function robMatrix(m){
+  const head = `<tr><th></th>${m.cols.map(c=>`<th>${esc(c)}</th>`).join("")}</tr>`;
+  const body = m.rows.map(r=>`<tr><th class="rlab">${esc(r)}</th>${m.cols.map(c=>{const v=(m.cells[r]||{})[c]; return v==null?'<td class="rcell">·</td>':robCell(v);}).join("")}</tr>`).join("");
+  return `<h3 class="cmp-h">${esc(m.title)}</h3><table class="matrix">${head}${body}</table>`;
+}
+function renderRobustness(){
+  const rb = DATA.robustness;
+  if(!rb || !rb.arms || !rb.arms.length){ const t=$("robTab"); if(t) t.style.display="none"; return; }
+  $("robBody").innerHTML = rb.arms.map(a=>`<div class="panel"><h2>${esc(a.arm)}</h2>${a.matrices.map(robMatrix).join("")}</div>`).join("");
+}
+renderRobustness();
 
 fillSelect($("gameSel"), DATA.games);
 refreshN1();
