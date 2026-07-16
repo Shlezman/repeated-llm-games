@@ -16,6 +16,7 @@ from .config.loader import load_run_spec
 from .config.schema import RunSpec
 from .loop.tournament import run_tournament
 from .results import generate_results_md
+from .robustness import run_robustness
 from .viz.comparison import build_comparison
 from .viz.replay import generate_replay_html
 
@@ -65,13 +66,37 @@ def _cmd_run(args: argparse.Namespace) -> None:
     logging.getLogger("llmgames.cli").info("DONE — open %s (and game_replay.html beside it)", results_md)
 
 
+def _maybe_robustness(rounds: list[Path], explicit: str | None) -> Path | None:
+    """Returns the robustness.csv to embed: an explicit path, else a sibling of any rounds CSV."""
+    if explicit:
+        return Path(explicit)
+    for r in rounds:
+        sibling = r.with_name("robustness.csv")
+        if sibling.exists():
+            return sibling
+    return None
+
+
 def _cmd_replay(args: argparse.Namespace) -> None:
     """Executes the ``replay`` subcommand: (re)generate the HTML replay from CSV(s)."""
     rounds = [Path(r) for r in args.rounds]
     out = Path(args.out) if args.out else rounds[0].with_name("game_replay.html")
     name = args.name or (rounds[0].parent.name if len(rounds) == 1 else "combined")
-    path = generate_replay_html(rounds, out, run_name=name, comparison=_maybe_comparison(rounds))
+    path = generate_replay_html(
+        rounds, out, run_name=name, comparison=_maybe_comparison(rounds),
+        robustness_csv=_maybe_robustness(rounds, args.robustness),
+    )
     print(f"Replay: {path}")
+
+
+def _cmd_robustness(args: argparse.Namespace) -> None:
+    """Executes the ``robustness`` subcommand: run the three robustness arms, write robustness.csv."""
+    run = load_run_spec(args.config)
+    if args.mock:
+        run = _force_mock(run)
+    out_dir = Path(args.out) if args.out else Path(run.output_dir) / run.name
+    path = run_robustness(run, out_dir)
+    print(f"Robustness CSV: {path}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -92,7 +117,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     replay_parser.add_argument("--out", help="Output HTML path (default: game_replay.html beside the CSV).")
     replay_parser.add_argument("--name", help="Run name shown in the header.")
+    replay_parser.add_argument(
+        "--robustness", help="robustness.csv to embed as the Robustness tab (else auto-detected)."
+    )
     replay_parser.set_defaults(func=_cmd_replay)
+
+    rob_parser = sub.add_parser("robustness", help="Run paper-style robustness checks -> robustness.csv.")
+    rob_parser.add_argument("--config", required=True, help="Path to a run YAML config.")
+    rob_parser.add_argument("--out", help="Output directory (default: <output_dir>/<name>).")
+    rob_parser.add_argument(
+        "--mock", action="store_true", help="Use the mock provider + in-memory cache (offline)."
+    )
+    rob_parser.set_defaults(func=_cmd_robustness)
     return parser
 
 
