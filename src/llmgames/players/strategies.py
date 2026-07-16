@@ -85,6 +85,13 @@ def hard_tft(view: PlayerView, rng: random.Random) -> Action:
     return ACTION_B if ACTION_B in recent else ACTION_A
 
 
+def grim_trigger(view: PlayerView, rng: random.Random) -> Action:
+    """Cooperates until the opponent defects once, then defects forever."""
+    if ACTION_B in view.opponent_actions:
+        return ACTION_B
+    return ACTION_A
+
+
 def _naive_prober(view: PlayerView, rng: random.Random, *, prob: float) -> Action:
     """Tit-for-tat that defects with probability ``prob`` instead of copying."""
     if view.round_index == 1:
@@ -116,6 +123,7 @@ STRATEGIES: dict[str, StrategyFn] = {
     "suspicious_tft": suspicious_tft,
     "reverse_tft": reverse_tft,
     "hard_tft": hard_tft,
+    "grim_trigger": grim_trigger,
     "naive_prober_10": naive_prober_10,
     "naive_prober_20": naive_prober_20,
 }

@@ -19,6 +19,9 @@ def render_rules(game, framing: Framing, *, am_row_player: bool, num_rounds: int
     """Renders the static rules block stating all four outcomes for one perspective."""
     intro_t = load_template("rules_intro")
     outcome_t = load_template("rules_outcome")
+    horizon = framing.horizon or (
+        f"You will play {num_rounds} {framing.round_word}s in total with the same player."
+    )
     lines = [
         intro_t.format(
             intro=framing.intro_text(),
@@ -26,8 +29,7 @@ def render_rules(game, framing: Framing, *, am_row_player: bool, num_rounds: int
             option_word=framing.option_word,
             label_a=framing.label(ACTIONS[0]),
             label_b=framing.label(ACTIONS[1]),
-            num_rounds=num_rounds,
-            round_word=framing.round_word,
+            horizon=horizon,
         )
     ]
     for mine in ACTIONS:
