@@ -45,18 +45,18 @@ Reproduction of Akata et al. (2025), *Playing repeated games with large language
 | --- | --- | --- | --- |
 | always_defect | BoS | 0.923 | 16 |
 | always_defect | PD Family | 1.000 | 16 |
-| claude-opus-4-6+scot | BoS | 0.885 | 4 |
-| claude-opus-4-6+scot | PD Family | 1.000 | 4 |
-| claude-haiku-4-5+scot | BoS | 0.957 | 4 |
-| claude-haiku-4-5+scot | PD Family | 0.808 | 4 |
-| gemini-3.1-pro-preview+scot | BoS | 0.916 | 4 |
-| gemini-3.1-pro-preview+scot | PD Family | 0.933 | 4 |
-| gemini-3.1-flash-lite+scot | BoS | 0.923 | 4 |
-| gemini-3.1-flash-lite+scot | PD Family | 1.000 | 4 |
-| gpt-4.1+scot | BoS | 0.932 | 4 |
-| gpt-4.1+scot | PD Family | 1.000 | 4 |
-| gpt-4.1-mini+scot | BoS | 0.950 | 4 |
-| gpt-4.1-mini+scot | PD Family | 1.000 | 4 |
+| claude-haiku-4-5+scot | BoS | 0.957 | 16 |
+| claude-haiku-4-5+scot | PD Family | 0.770 | 16 |
+| claude-opus-4-6+scot | BoS | 0.895 | 16 |
+| claude-opus-4-6+scot | PD Family | 1.000 | 16 |
+| gemini-3.1-flash-lite+scot | BoS | 0.862 | 16 |
+| gemini-3.1-flash-lite+scot | PD Family | 1.000 | 16 |
+| gemini-3.1-pro-preview+scot | BoS | 0.848 | 16 |
+| gemini-3.1-pro-preview+scot | PD Family | 0.917 | 16 |
+| gpt-4.1+scot | BoS | 0.932 | 16 |
+| gpt-4.1+scot | PD Family | 1.000 | 16 |
+| gpt-4.1-mini+scot | BoS | 0.945 | 16 |
+| gpt-4.1-mini+scot | PD Family | 1.000 | 16 |
 | tit_for_tat | BoS | 0.928 | 16 |
 | tit_for_tat | PD Family | 0.874 | 16 |
 
@@ -80,12 +80,12 @@ Reproduction of Akata et al. (2025), *Playing repeated games with large language
 
 | player | accuracy | n_predictions |
 | --- | --- | --- |
-| claude-opus-4-6+scot | 0.912 | 80 |
-| claude-haiku-4-5+scot | 0.875 | 80 |
-| gemini-3.1-pro-preview+scot | 0.938 | 80 |
-| gemini-3.1-flash-lite+scot | 0.938 | 80 |
-| gpt-4.1+scot | 0.925 | 80 |
-| gpt-4.1-mini+scot | 0.900 | 80 |
+| claude-haiku-4-5+scot | 0.881 | 320 |
+| claude-opus-4-6+scot | 0.919 | 320 |
+| gemini-3.1-flash-lite+scot | 0.903 | 320 |
+| gemini-3.1-pro-preview+scot | 0.881 | 320 |
+| gpt-4.1+scot | 0.887 | 320 |
+| gpt-4.1-mini+scot | 0.916 | 320 |
 
 ![Prediction accuracy](figures/prediction_accuracy.png)
 
