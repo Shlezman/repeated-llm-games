@@ -153,6 +153,66 @@ def build_robustness(robustness_csv) -> dict | None:
     return {"arms": arms}
 
 
+_STRATEGY_NAMES = {
+    "tit_for_tat", "always_defect", "always_cooperate", "defect_once", "alternate",
+    "alternate_ab", "alternate_ba", "tit_for_two_tats", "suspicious_tft", "reverse_tft",
+    "hard_tft", "grim_trigger", "naive_prober_10", "naive_prober_20",
+}
+
+
+def build_heatmaps(df) -> dict | None:
+    """Builds player×player behavioural heatmaps from base-mode rounds (paper Fig. 5 style).
+
+    Args:
+        df: The merged per-round frame (uses only ``mode == "base"`` rows for a clean matrix).
+
+    Returns:
+        ``{"maps": [{"title", "players", "cells", "vmin", "vmax"}]}`` or None if no base rows.
+    """
+    base = df[df["mode"] == "base"] if "mode" in df.columns else df
+    if base.empty:
+        return None
+    players = set(base["player1"]).union(base["player2"])
+    models = sorted(p for p in players if p not in _STRATEGY_NAMES)
+    order = models + [p for p in sorted(players) if p in _STRATEGY_NAMES]
+
+    def _matrix(sub, fn) -> dict:
+        cells = {p: {} for p in order}
+        for (a, b), grp in sub.groupby(["player1", "player2"]):
+            cells[a][b] = fn(grp)
+        return cells
+
+    valid = base[base["action1"].isin(["A", "B"])]
+    pd_g = valid[valid["game_name"] == "Prisoner's Dilemma"]
+    bos_g = valid[valid["game_name"] == "Battle of the Sexes"]
+
+    def _defect(grp):
+        return round((grp["action1"] == "B").mean(), 3) if len(grp) else None
+
+    def _coord(grp):
+        v = grp[grp["action2"].isin(["A", "B"])]
+        return round((v["action1"] == v["action2"]).mean(), 3) if len(v) else None
+
+    def _score(grp):
+        return int(grp.loc[grp["round"].idxmax(), "total1"])
+
+    pd_def, pd_score, bos_coord = _matrix(pd_g, _defect), _matrix(pd_g, _score), _matrix(bos_g, _coord)
+
+    def _range(cells):
+        vals = [v for row in cells.values() for v in row.values() if v is not None]
+        return (min(vals), max(vals)) if vals else (0, 1)
+
+    smin, smax = _range(pd_score)
+    return {"maps": [
+        {"title": "Prisoner's Dilemma — Player 1 defection rate", "players": order,
+         "cells": pd_def, "vmin": 0, "vmax": 1},
+        {"title": "Prisoner's Dilemma — Player 1 final score", "players": order,
+         "cells": pd_score, "vmin": smin, "vmax": smax},
+        {"title": "Battle of the Sexes — coordination rate", "players": order,
+         "cells": bos_coord, "vmin": 0, "vmax": 1},
+    ]}
+
+
 def _as_paths(value) -> list[Path]:
     """Normalizes a path or list of paths into a list of :class:`Path`."""
     items = value if isinstance(value, (list, tuple)) else [value]
@@ -219,6 +279,7 @@ def generate_replay_html(
         "thoughts": _build_thoughts(tdf),
         "comparison": comparison,
         "robustness": build_robustness(robustness_csv),
+        "heatmaps": build_heatmaps(df),
     }
     payload = json.dumps(data, separators=(",", ":"))
     document = _HTML_TEMPLATE.replace("/*__DATA__*/", payload).replace(
@@ -302,6 +363,15 @@ _HTML_TEMPLATE = r"""<!doctype html>
 .matrix th{color:var(--muted);font-weight:600}
 .matrix .rlab{text-align:left;color:#e8e8f0;white-space:nowrap}
 .rcell{font-variant-numeric:tabular-nums;color:#0b0b12;font-weight:600}
+.hmwrap{overflow-x:auto;max-width:100%}
+.barsvg{width:100%;height:auto;margin:2px 0 14px}
+.barsvg .grid{stroke:#2a2a3a;stroke-width:1}
+.barsvg .ytick{fill:var(--muted);font-size:10px;text-anchor:end}
+.barsvg .xtick{fill:#cfcfda;font-size:11px;text-anchor:end}
+.barsvg rect{rx:1}
+.blegend{display:flex;flex-wrap:wrap;gap:10px 16px;margin:2px 0 10px;font-size:12px}
+.bchip{display:inline-flex;align-items:center;gap:6px;color:#cfcfda}
+.bchip i{width:12px;height:12px;border-radius:2px;display:inline-block}
 </style>
 </head>
 <body>
@@ -313,6 +383,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
     <button class="tab active" data-tab="replay">Replay</button>
     <button class="tab" data-tab="compare" id="cmpTab">Paper vs Implementation</button>
     <button class="tab" data-tab="robust" id="robTab">Robustness</button>
+    <button class="tab" data-tab="heat" id="hmTab">Heatmaps</button>
   </div>
 
   <div id="tab-replay" class="tabpage">
@@ -372,9 +443,13 @@ _HTML_TEMPLATE = r"""<!doctype html>
   </div><!-- /tab-compare -->
 
   <div id="tab-robust" class="tabpage" hidden>
-    <p class="sub" style="margin:0 0 4px">Does a finding survive a change in wording, payoffs, or horizon? Each cell is a rate (0–1); greener = higher. In the framing arm a row should stay ~constant across columns if the behaviour is robust to prompt wording.</p>
+    <p class="sub" style="margin:0 0 4px">Does a finding survive a change in wording, payoffs, or horizon? Grouped bars (0–1 rate), one colour per model. In the framing arm a model's bars should stay ~level across conditions if the behaviour is robust to prompt wording.</p>
     <div id="robBody"></div>
   </div><!-- /tab-robust -->
+
+  <div id="tab-heat" class="tabpage" hidden>
+    <div id="hmBody"></div>
+  </div><!-- /tab-heat -->
 </div>
 
 <script>
@@ -510,6 +585,7 @@ document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
   $("tab-replay").hidden = b.dataset.tab!=='replay';
   $("tab-compare").hidden = b.dataset.tab!=='compare';
   $("tab-robust").hidden = b.dataset.tab!=='robust';
+  $("tab-heat").hidden = b.dataset.tab!=='heat';
 });
 function ratioRows(items, cls){
   return items.map(it=>`<div class="cmprow"><div class="lab">${it.label}</div><div class="cmptrack"><div class="cmpfill ${cls}" style="width:${(it.ratio*100).toFixed(0)}%"></div></div><div class="cmpval">${it.ratio.toFixed(2)}</div></div>`).join("");
@@ -529,18 +605,53 @@ function renderComparison(){
 }
 renderComparison();
 
-function robCell(v){ return `<td class="rcell" style="background:rgba(46,160,67,${(0.1+0.55*v).toFixed(3)})">${v.toFixed(2)}</td>`; }
-function robMatrix(m){
-  const head = `<tr><th></th>${m.cols.map(c=>`<th>${esc(c)}</th>`).join("")}</tr>`;
-  const body = m.rows.map(r=>`<tr><th class="rlab">${esc(r)}</th>${m.cols.map(c=>{const v=(m.cells[r]||{})[c]; return v==null?'<td class="rcell">·</td>':robCell(v);}).join("")}</tr>`).join("");
-  return `<h3 class="cmp-h">${esc(m.title)}</h3><table class="matrix">${head}${body}</table>`;
+const COLORS = ['#4c8bf5','#e0a32e','#38a169','#e5484d','#8b5cf6','#14b8a6','#ec4899','#a3a3a3'];
+
+// --- Robustness: grouped bar charts (paper Fig. 4 style) ---
+function barChart(m){
+  const W=760,H=250,ml=34,mr=10,mt=12,mb=70,iw=W-ml-mr,ih=H-mt-mb;
+  const cats=m.cols, series=m.rows, gW=iw/cats.length;
+  const bW=Math.max(3,Math.min(34,(gW-8)/series.length));
+  let s=`<svg viewBox="0 0 ${W} ${H}" class="barsvg">`;
+  [0,.25,.5,.75,1].forEach(t=>{const y=mt+ih-t*ih; s+=`<line class="grid" x1="${ml}" y1="${y}" x2="${W-mr}" y2="${y}"/><text class="ytick" x="${ml-5}" y="${y+3}">${t}</text>`;});
+  cats.forEach((c,ci)=>{
+    const gx=ml+ci*gW, off=(gW-bW*series.length)/2;
+    series.forEach((r,ri)=>{
+      const v=(m.cells[r]||{})[c]; if(v==null) return;
+      const h=v*ih, x=gx+off+ri*bW;
+      s+=`<rect x="${x}" y="${mt+ih-h}" width="${bW-1.5}" height="${h}" fill="${COLORS[ri%COLORS.length]}"><title>${esc(r)} · ${esc(c)}: ${v.toFixed(2)}</title></rect>`;
+    });
+    const lx=gx+gW/2, ly=mt+ih+12;
+    s+=`<text class="xtick" x="${lx}" y="${ly}" transform="rotate(-20 ${lx} ${ly})">${esc(c)}</text>`;
+  });
+  return s+`</svg>`;
 }
+function robLegend(models){return `<div class="blegend">`+models.map((m,i)=>`<span class="bchip"><i style="background:${COLORS[i%COLORS.length]}"></i>${esc(m)}</span>`).join("")+`</div>`;}
 function renderRobustness(){
-  const rb = DATA.robustness;
-  if(!rb || !rb.arms || !rb.arms.length){ const t=$("robTab"); if(t) t.style.display="none"; return; }
-  $("robBody").innerHTML = rb.arms.map(a=>`<div class="panel"><h2>${esc(a.arm)}</h2>${a.matrices.map(robMatrix).join("")}</div>`).join("");
+  const rb=DATA.robustness;
+  if(!rb||!rb.arms||!rb.arms.length){const t=$("robTab"); if(t) t.style.display="none"; return;}
+  $("robBody").innerHTML=rb.arms.map(a=>`<div class="panel"><h2>${esc(a.arm)}</h2>${robLegend(a.matrices[0].rows)}${a.matrices.map(m=>`<h3 class="cmp-h">${esc(m.title)}</h3>${barChart(m)}`).join("")}</div>`).join("");
 }
 renderRobustness();
+
+// --- Player×player behavioural heatmaps (paper Fig. 5 style) ---
+function hmCell(v,vmin,vmax){
+  const t=(vmax>vmin)?(v-vmin)/(vmax-vmin):0;
+  const txt=Number.isInteger(v)?v:v.toFixed(2);
+  return `<td class="rcell" style="background:rgba(46,160,67,${(0.08+0.7*t).toFixed(3)})">${txt}</td>`;
+}
+function heatmap(m){
+  const P=m.players;
+  const head=`<tr><th></th>${P.map(c=>`<th class="rlab">${esc(c)}</th>`).join("")}</tr>`;
+  const body=P.map(r=>`<tr><th class="rlab">${esc(r)}</th>${P.map(c=>{const v=(m.cells[r]||{})[c]; return (v==null)?'<td class="rcell">·</td>':hmCell(v,m.vmin,m.vmax);}).join("")}</tr>`).join("");
+  return `<h3 class="cmp-h">${esc(m.title)}</h3><div class="hmwrap"><table class="matrix">${head}${body}</table></div>`;
+}
+function renderHeatmaps(){
+  const hm=DATA.heatmaps;
+  if(!hm||!hm.maps||!hm.maps.length){const t=$("hmTab"); if(t) t.style.display="none"; return;}
+  $("hmBody").innerHTML=`<div class="panel"><p class="sub" style="margin:0 0 10px">Player 1 (row) vs Player 2 (column), base mode, averaged over the 10 rounds — the paper's Fig. 5 behavioural matrices. Greener = higher.</p>`+hm.maps.map(heatmap).join("")+`</div>`;
+}
+renderHeatmaps();
 
 fillSelect($("gameSel"), DATA.games);
 refreshN1();
