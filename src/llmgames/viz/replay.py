@@ -302,7 +302,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
   /* Modern pastel, Anthropic-inspired: warm ivory ground, terracotta accent, muted sage/coral. */
   :root {
     --bg:#F5F3EC; --panel:#FFFFFF; --ink:#26241F; --muted:#8A8679;
-    --coop:#7FA37C; --defect:#C96F5C; --accent:#C6714F; --line1:#7A9CC6; --line2:#D9A45B;
+    --coop:#7FA37C; --defect:#C96F5C; --accent:#D9B54C; --accent-ink:#3F3819; --line1:#7A9CC6; --line2:#D9A45B;
     --border:#E7E3D7; --soft:#F7F5EE;
   }
   * { box-sizing:border-box; }
@@ -318,8 +318,8 @@ _HTML_TEMPLATE = r"""<!doctype html>
   tbody tr:hover { background:var(--soft); }
   .controls { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:16px; }
   select,button { background:var(--panel); color:var(--ink); border:1px solid var(--border); border-radius:10px; padding:7px 12px; font:inherit; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
-  button:hover,select:hover { border-color:var(--accent); box-shadow:0 0 0 3px rgba(198,113,79,.12); }
-  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button:hover,select:hover { border-color:var(--accent); box-shadow:0 0 0 3px rgba(217,181,76,.18); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; }
   input[type=range] { accent-color:var(--accent); }
   .stage { display:grid; grid-template-columns:1fr auto 1fr; gap:16px; align-items:start; }
   .player { text-align:center; }
@@ -341,7 +341,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
   .legend { color:var(--muted); font-size:12px; margin-top:8px; }
   .thoughts { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
   .think { background:var(--soft); border:1px solid var(--border); border-radius:12px; padding:12px 14px; font-size:12.5px; }
-  .think h3 { margin:0 0 6px; font-size:12px; color:var(--accent); }
+  .think h3 { margin:0 0 6px; font-size:12px; color:#A8842A; }
   .think .pred { color:var(--muted); margin-bottom:6px; }
   .think p { margin:4px 0; white-space:pre-wrap; }
   code { background:var(--soft); border:1px solid var(--border); padding:1px 6px; border-radius:6px; font-size:.92em; }
@@ -350,7 +350,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
   .tabs { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
   .tab { background:transparent; border:1px solid var(--border); color:var(--muted); padding:8px 16px; border-radius:999px; cursor:pointer; font:inherit; transition:.15s; }
   .tab:hover { border-color:var(--accent); color:var(--ink); }
-  .tab.active { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  .tab.active { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; }
   .tabpage[hidden] { display:none; }
   .cmp-h { font-size:13.5px; color:var(--ink); margin:18px 0 8px; font-weight:600; }
   .cmprow { display:grid; grid-template-columns:170px 1fr 92px; gap:8px; align-items:center; margin:5px 0; font-size:12.5px; }
@@ -643,7 +643,7 @@ renderRobustness();
 function hmCell(v,vmin,vmax){
   const t=(vmax>vmin)?(v-vmin)/(vmax-vmin):0;
   const txt=Number.isInteger(v)?v:v.toFixed(2);
-  return `<td class="rcell" style="background:rgba(198,113,79,${(0.07+0.6*t).toFixed(3)})">${txt}</td>`;
+  return `<td class="rcell" style="background:rgba(217,181,76,${(0.08+0.72*t).toFixed(3)})">${txt}</td>`;
 }
 function heatmap(m){
   const P=m.players;
