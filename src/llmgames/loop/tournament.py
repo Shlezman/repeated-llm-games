@@ -104,7 +104,7 @@ def _build_llm_factories(run) -> list[tuple[str, PlayerFactory]]:
         utility_label=run.robustness.utility_label,
         labels=_resolve_labels(run.robustness.labels, run.seed),
     )
-    scot = run.mode == "scot"
+    scot_variants = {"base": (False,), "scot": (True,), "mixed": (False, True)}[run.mode]
     factories: list[tuple[str, PlayerFactory]] = []
     for spec in run.models:
         model = build_chat_model(
@@ -115,12 +115,13 @@ def _build_llm_factories(run) -> list[tuple[str, PlayerFactory]]:
             base_url=spec.base_url,
             timeout=spec.params.request_timeout,
         )
-        name = f"{spec.id}" + ("+scot" if scot else "")
+        for scot in scot_variants:
+            name = f"{spec.id}" + ("+scot" if scot else "")
 
-        def factory(model=model, name=name) -> Player:
-            return LLMPlayer(name, model, framing, scot=scot, reasoning=run.reasoning)
+            def factory(model=model, name=name, scot=scot) -> Player:
+                return LLMPlayer(name, model, framing, scot=scot, reasoning=run.reasoning)
 
-        factories.append((name, factory))
+            factories.append((name, factory))
     return factories
 
 
