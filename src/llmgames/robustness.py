@@ -4,8 +4,9 @@ Three arms mirroring the original paper's robustness experiments:
   1. Framing invariance — canonical PD (vs defect_once) + BoS (vs alternate), re-run under
      cover stories, unit-word swap, label swap, and no option-order shuffle.
   2. BoS payoff sweep — the 5 interpolated matrices (JJ 10,7 -> 9,8 -> 8,8 -> 8,9 -> 7,10).
-  3. PD ending-probability — indefinite horizon with a per-round end chance (0/40/60/80%),
-     20 rounds, prompt-only framing (the loop still runs a fixed 20, as in the paper).
+  3. PD ending-probability — indefinite horizon with a per-round end chance
+     (0/1/40/60/80%), 20 rounds, prompt-only framing (the loop still runs a fixed 20,
+     as in the paper; 0% is the fixed-round baseline).
 
 Writes long-format robustness.csv (arm, variant, model, game, metric, value), consumed by
 the "Robustness" tab of game_replay.html. Uses only public engine/player APIs.
@@ -40,7 +41,7 @@ _FRAMINGS = [
     ("labels=Q/X", {"labels": ("Q", "X")}, True),
     ("no order-shuffle", {}, False),
 ]
-_ENDING_PROBS = [0, 40, 60, 80]
+_ENDING_PROBS = [0, 1, 40, 60, 80]
 
 
 def _bos_sweep() -> list[Game]:
