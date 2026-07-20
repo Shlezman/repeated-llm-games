@@ -19,8 +19,10 @@ def render_rules(game, framing: Framing, *, am_row_player: bool, num_rounds: int
     """Renders the static rules block stating all four outcomes for one perspective."""
     intro_t = load_template("rules_intro")
     outcome_t = load_template("rules_outcome")
+    # "round"->"rounds" but "dish"->"dishes"; "the other contestant"->"contestant".
+    plural = framing.round_word + ("es" if framing.round_word.endswith(("s", "sh", "ch", "x", "z")) else "s")
     horizon = framing.horizon or (
-        f"You will play {num_rounds} {framing.round_word}s in total with the same player."
+        f"You will play {num_rounds} {plural} in total with the same {framing.opponent_word.split()[-1]}."
     )
     lines = [
         intro_t.format(
