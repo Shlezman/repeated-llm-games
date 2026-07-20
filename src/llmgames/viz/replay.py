@@ -113,6 +113,106 @@ def _build_thoughts(tdf: pd.DataFrame | None) -> dict:
     return out
 
 
+_ARM_LABELS = {
+    "framing": "Framing invariance",
+    "payoff_sweep": "BoS payoff sweep",
+    "ending_prob": "PD ending probability",
+}
+
+
+def build_robustness(robustness_csv) -> dict | None:
+    """Builds the robustness-tab payload from a robustness.csv, or None if absent.
+
+    Args:
+        robustness_csv: Path to a run's robustness.csv (long: arm, variant, model,
+            game, metric, value).
+
+    Returns:
+        ``{"arms": [{"arm", "matrices": [{"title", "rows", "cols", "cells"}]}]}`` or None.
+    """
+    if not robustness_csv or not Path(robustness_csv).exists():
+        return None
+    df = pd.read_csv(robustness_csv)
+    arms = []
+    for arm in ["framing", "payoff_sweep", "ending_prob"]:
+        sub = df[df["arm"] == arm]
+        if sub.empty:
+            continue
+        matrices = []
+        for (game, metric), grp in sub.groupby(["game", "metric"], sort=False):
+            cols = list(dict.fromkeys(grp["variant"]))
+            rows = list(dict.fromkeys(grp["model"]))
+            cells = {m: {} for m in rows}
+            for r in grp.itertuples():
+                cells[r.model][r.variant] = round(float(r.value), 3)
+            matrices.append({
+                "title": f"{game} — {metric.replace('_', ' ')}",
+                "rows": rows, "cols": cols, "cells": cells,
+            })
+        arms.append({"arm": _ARM_LABELS.get(arm, arm), "matrices": matrices})
+    return {"arms": arms}
+
+
+_STRATEGY_NAMES = {
+    "tit_for_tat", "always_defect", "always_cooperate", "defect_once", "alternate",
+    "alternate_ab", "alternate_ba", "tit_for_two_tats", "suspicious_tft", "reverse_tft",
+    "hard_tft", "grim_trigger", "naive_prober_10", "naive_prober_20",
+}
+
+
+def build_heatmaps(df) -> dict | None:
+    """Builds player×player behavioural heatmaps from base-mode rounds (paper Fig. 5 style).
+
+    Args:
+        df: The merged per-round frame (uses only ``mode == "base"`` rows for a clean matrix).
+
+    Returns:
+        ``{"maps": [{"title", "players", "cells", "vmin", "vmax"}]}`` or None if no base rows.
+    """
+    base = df[df["mode"] == "base"] if "mode" in df.columns else df
+    if base.empty:
+        return None
+    players = set(base["player1"]).union(base["player2"])
+    models = sorted(p for p in players if p not in _STRATEGY_NAMES)
+    order = models + [p for p in sorted(players) if p in _STRATEGY_NAMES]
+
+    def _matrix(sub, fn) -> dict:
+        cells = {p: {} for p in order}
+        for (a, b), grp in sub.groupby(["player1", "player2"]):
+            cells[a][b] = fn(grp)
+        return cells
+
+    valid = base[base["action1"].isin(["A", "B"])]
+    pd_g = valid[valid["game_name"] == "Prisoner's Dilemma"]
+    bos_g = valid[valid["game_name"] == "Battle of the Sexes"]
+
+    def _defect(grp):
+        return round((grp["action1"] == "B").mean(), 3) if len(grp) else None
+
+    def _coord(grp):
+        v = grp[grp["action2"].isin(["A", "B"])]
+        return round((v["action1"] == v["action2"]).mean(), 3) if len(v) else None
+
+    def _score(grp):
+        return int(grp.loc[grp["round"].idxmax(), "total1"])
+
+    pd_def, pd_score, bos_coord = _matrix(pd_g, _defect), _matrix(pd_g, _score), _matrix(bos_g, _coord)
+
+    def _range(cells):
+        vals = [v for row in cells.values() for v in row.values() if v is not None]
+        return (min(vals), max(vals)) if vals else (0, 1)
+
+    smin, smax = _range(pd_score)
+    return {"maps": [
+        {"title": "Prisoner's Dilemma — Player 1 defection rate", "players": order,
+         "cells": pd_def, "vmin": 0, "vmax": 1},
+        {"title": "Prisoner's Dilemma — Player 1 final score", "players": order,
+         "cells": pd_score, "vmin": smin, "vmax": smax},
+        {"title": "Battle of the Sexes — coordination rate", "players": order,
+         "cells": bos_coord, "vmin": 0, "vmax": 1},
+    ]}
+
+
 def _as_paths(value) -> list[Path]:
     """Normalizes a path or list of paths into a list of :class:`Path`."""
     items = value if isinstance(value, (list, tuple)) else [value]
@@ -126,6 +226,7 @@ def generate_replay_html(
     run_name: str = "",
     thoughts_csv=None,
     comparison: dict | None = None,
+    robustness_csv=None,
 ) -> Path:
     """Generates the animated HTML replay, merging one or more runs.
 
@@ -177,6 +278,8 @@ def generate_replay_html(
         "games": sorted(df["game_name"].unique().tolist()),
         "thoughts": _build_thoughts(tdf),
         "comparison": comparison,
+        "robustness": build_robustness(robustness_csv),
+        "heatmaps": build_heatmaps(df),
     }
     payload = json.dumps(data, separators=(",", ":"))
     document = _HTML_TEMPLATE.replace("/*__DATA__*/", payload).replace(
@@ -196,65 +299,84 @@ _HTML_TEMPLATE = r"""<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>llmgames — game replay (__RUN_NAME__)</title>
 <style>
+  /* Modern pastel, Anthropic-inspired: warm ivory ground, terracotta accent, muted sage/coral. */
   :root {
-    --bg:#0f1419; --panel:#1a212b; --ink:#e6edf3; --muted:#8b98a5;
-    --coop:#2e9e6b; --defect:#d2452f; --accent:#4c8bf5; --line1:#4c8bf5; --line2:#e0a32e;
+    --bg:#F5F3EC; --panel:#FFFFFF; --ink:#26241F; --muted:#8A8679;
+    --coop:#7FA37C; --defect:#C96F5C; --accent:#D9B54C; --accent-ink:#3F3819; --line1:#7A9CC6; --line2:#D9A45B;
+    --border:#E7E3D7; --soft:#F7F5EE;
   }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  .wrap { max-width:1000px; margin:0 auto; padding:24px; }
-  h1 { font-size:20px; margin:0 0 2px; } .sub { color:var(--muted); margin:0 0 20px; }
-  .panel { background:var(--panel); border:1px solid #2a3440; border-radius:12px; padding:16px; margin-bottom:18px; }
-  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 12px; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:1000px; margin:0 auto; padding:32px 24px; }
+  h1 { font:600 26px/1.25 Georgia,"Times New Roman",serif; letter-spacing:-.01em; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 22px; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:20px; box-shadow:0 1px 3px rgba(38,36,31,.05); }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted); margin:0 0 12px; font-weight:600; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
-  th,td { text-align:left; padding:6px 10px; border-bottom:1px solid #2a3440; }
+  th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--border); }
   th { color:var(--muted); font-weight:600; }
+  tbody tr:hover { background:var(--soft); }
   .controls { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:16px; }
-  select,button { background:#0f1722; color:var(--ink); border:1px solid #2a3440; border-radius:8px; padding:7px 10px; font:inherit; cursor:pointer; }
-  button:hover,select:hover { border-color:var(--accent); }
-  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  select,button { background:var(--panel); color:var(--ink); border:1px solid var(--border); border-radius:10px; padding:7px 12px; font:inherit; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
+  button:hover,select:hover { border-color:var(--accent); box-shadow:0 0 0 3px rgba(217,181,76,.18); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; }
   input[type=range] { accent-color:var(--accent); }
   .stage { display:grid; grid-template-columns:1fr auto 1fr; gap:16px; align-items:start; }
   .player { text-align:center; }
   .psel { width:100%; font-weight:700; text-align:center; margin-bottom:10px; }
-  .badge { width:88px; height:88px; line-height:88px; margin:0 auto; border-radius:16px; font-size:44px; font-weight:800; color:#fff; transition:.2s; }
-  .badge.J { background:var(--coop); } .badge.F { background:var(--defect); } .badge.q { background:#5a6673; }
+  .badge { width:88px; height:88px; line-height:88px; margin:0 auto; border-radius:20px; font-size:44px; font-weight:800; color:#fff; transition:.2s; box-shadow:0 2px 8px rgba(38,36,31,.12); }
+  .badge.J { background:var(--coop); } .badge.F { background:var(--defect); } .badge.q { background:#C9C5B8; }
   .delta { font-size:13px; color:var(--muted); margin-top:8px; height:18px; }
   .total { font-size:26px; font-weight:800; margin-top:4px; }
-  .bar { height:8px; background:#0f1722; border-radius:4px; margin-top:8px; overflow:hidden; }
+  .bar { height:8px; background:var(--soft); border:1px solid var(--border); border-radius:5px; margin-top:8px; overflow:hidden; }
   .bar > div { height:100%; transition:.25s; }
   .bar1 > div { background:var(--line1); } .bar2 > div { background:var(--line2); }
-  .vs { text-align:center; color:var(--muted); padding-top:30px; }
+  .vs { text-align:center; color:var(--muted); padding-top:30px; font-style:italic; font-family:Georgia,serif; }
   .outcome { text-align:center; margin:14px 0 6px; min-height:20px; font-size:13px; }
   .dots { display:flex; gap:6px; justify-content:center; margin:10px 0; flex-wrap:wrap; }
-  .dot { width:22px; height:22px; border-radius:6px; font-size:10px; line-height:22px; text-align:center; color:#0f1419; font-weight:700; background:#2a3440; opacity:.5; cursor:pointer; }
-  .dot.cur { outline:2px solid var(--accent); opacity:1; }
+  .dot { width:22px; height:22px; border-radius:7px; font-size:10px; line-height:22px; text-align:center; color:#fff; font-weight:700; background:#D8D4C8; opacity:.55; cursor:pointer; }
+  .dot.cur { outline:2px solid var(--accent); outline-offset:1px; opacity:1; }
   .dot.done { opacity:1; }
   svg { width:100%; height:160px; display:block; }
   .legend { color:var(--muted); font-size:12px; margin-top:8px; }
   .thoughts { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
-  .think { background:#0f1722; border:1px solid #2a3440; border-radius:8px; padding:10px 12px; font-size:12.5px; }
-  .think h3 { margin:0 0 6px; font-size:12px; color:var(--accent); }
+  .think { background:var(--soft); border:1px solid var(--border); border-radius:12px; padding:12px 14px; font-size:12.5px; }
+  .think h3 { margin:0 0 6px; font-size:12px; color:#A8842A; }
   .think .pred { color:var(--muted); margin-bottom:6px; }
   .think p { margin:4px 0; white-space:pre-wrap; }
-  code { background:#0f1722; padding:1px 6px; border-radius:5px; }
-  .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; font-weight:700; }
-  .pill.J { background:rgba(46,158,107,.2); color:#52c08a; } .pill.F { background:rgba(210,69,47,.2); color:#e0735f; }
-  .tabs { display:flex; gap:8px; margin-bottom:16px; }
-  .tab { background:#0f1722; border:1px solid #2a3440; color:var(--muted); padding:8px 14px; border-radius:8px; cursor:pointer; font:inherit; }
-  .tab.active { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  code { background:var(--soft); border:1px solid var(--border); padding:1px 6px; border-radius:6px; font-size:.92em; }
+  .pill { display:inline-block; padding:1px 9px; border-radius:10px; font-size:11px; font-weight:700; }
+  .pill.J { background:rgba(127,163,124,.18); color:#5C8159; } .pill.F { background:rgba(201,111,92,.16); color:#B25A46; }
+  .tabs { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+  .tab { background:transparent; border:1px solid var(--border); color:var(--muted); padding:8px 16px; border-radius:999px; cursor:pointer; font:inherit; transition:.15s; }
+  .tab:hover { border-color:var(--accent); color:var(--ink); }
+  .tab.active { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; }
   .tabpage[hidden] { display:none; }
-  .cmp-h { font-size:13px; color:var(--ink); margin:16px 0 8px; }
+  .cmp-h { font-size:13.5px; color:var(--ink); margin:18px 0 8px; font-weight:600; }
   .cmprow { display:grid; grid-template-columns:170px 1fr 92px; gap:8px; align-items:center; margin:5px 0; font-size:12.5px; }
   .cmprow .lab { color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .cmptrack { background:#0f1722; border-radius:4px; height:16px; overflow:hidden; }
+  .cmptrack { background:var(--soft); border:1px solid var(--border); border-radius:5px; height:16px; overflow:hidden; }
   .cmpfill { height:100%; border-radius:4px; }
   .cmpfill.paper { background:var(--line2); } .cmpfill.impl { background:var(--line1); }
   .cmpval { text-align:right; font-variant-numeric:tabular-nums; color:var(--ink); }
   .scotrow { display:grid; grid-template-columns:150px 1fr; gap:10px; align-items:center; margin:9px 0; font-size:12.5px; }
   .scotbar { display:flex; align-items:center; gap:8px; margin:2px 0; }
-  .sb { height:13px; border-radius:3px; min-width:2px; } .sb.base { background:#5a6673; } .sb.scot { background:var(--coop); }
+  .sb { height:13px; border-radius:4px; min-width:2px; } .sb.base { background:#C9C5B8; } .sb.scot { background:var(--coop); }
   .legendrow { margin:4px 0 12px; color:var(--muted); font-size:12px; }
+  .matrix { border-collapse:separate; border-spacing:2px; margin:6px 0 22px; font-size:13px; }
+  .matrix th,.matrix td { border:none; padding:6px 11px; text-align:center; border-radius:6px; }
+  .matrix th { color:var(--muted); font-weight:600; background:transparent; }
+  .matrix .rlab { text-align:left; color:var(--ink); white-space:nowrap; }
+  .rcell { font-variant-numeric:tabular-nums; color:var(--ink); font-weight:600; background:var(--soft); }
+  .hmwrap { overflow-x:auto; max-width:100%; }
+  .barsvg { width:100%; height:auto; margin:2px 0 16px; }
+  .barsvg .grid { stroke:var(--border); stroke-width:1; }
+  .barsvg .ytick { fill:var(--muted); font-size:10px; text-anchor:end; }
+  .barsvg .xtick { fill:var(--ink); font-size:11px; text-anchor:end; }
+  .barsvg rect { rx:2; }
+  .blegend { display:flex; flex-wrap:wrap; gap:10px 16px; margin:2px 0 12px; font-size:12px; }
+  .bchip { display:inline-flex; align-items:center; gap:6px; color:var(--ink); }
+  .bchip i { width:12px; height:12px; border-radius:3px; display:inline-block; }
 </style>
 </head>
 <body>
@@ -265,6 +387,8 @@ _HTML_TEMPLATE = r"""<!doctype html>
   <div class="tabs">
     <button class="tab active" data-tab="replay">Replay</button>
     <button class="tab" data-tab="compare" id="cmpTab">Paper vs Implementation</button>
+    <button class="tab" data-tab="robust" id="robTab">Robustness</button>
+    <button class="tab" data-tab="heat" id="hmTab">Heatmaps</button>
   </div>
 
   <div id="tab-replay" class="tabpage">
@@ -322,6 +446,15 @@ _HTML_TEMPLATE = r"""<!doctype html>
       <div id="cmp-scot"></div>
     </div>
   </div><!-- /tab-compare -->
+
+  <div id="tab-robust" class="tabpage" hidden>
+    <p class="sub" style="margin:0 0 4px">Does a finding survive a change in wording, payoffs, or horizon? Grouped bars (0–1 rate), one colour per model. In the framing arm a model's bars should stay ~level across conditions if the behaviour is robust to prompt wording.</p>
+    <div id="robBody"></div>
+  </div><!-- /tab-robust -->
+
+  <div id="tab-heat" class="tabpage" hidden>
+    <div id="hmBody"></div>
+  </div><!-- /tab-heat -->
 </div>
 
 <script>
@@ -399,7 +532,7 @@ function drawDots(){
   current.rounds.forEach((x,i)=>{
     const el=document.createElement("div"); el.className="dot"+(i<round?" done":"")+(i===round-1?" cur":"");
     el.textContent=`${x.a1}${x.a2}`;
-    if(i<round){ el.style.background = (x.a1==="J"&&x.a2==="J")?"var(--coop)":(x.a1==="F"&&x.a2==="F")?"#e0a32e":"var(--defect)"; }
+    if(i<round){ el.style.background = (x.a1==="J"&&x.a2==="J")?"var(--coop)":(x.a1==="F"&&x.a2==="F")?"var(--line2)":"var(--defect)"; }
     el.title=`Round ${x.r}: ${x.a1}/${x.a2} → ${x.p1}/${x.p2}`;
     el.onclick=()=>{ stop(); render(i+1); };
     d.appendChild(el);
@@ -430,7 +563,7 @@ function drawChart(){
   $("chart").innerHTML=`
     <polyline fill="none" stroke="var(--line1)" stroke-width="2.5" points="${pts(current.rounds,"t1",W,H)}"/>
     <polyline fill="none" stroke="var(--line2)" stroke-width="2.5" points="${pts(current.rounds,"t2",W,H)}"/>
-    <line id="mk" x1="0" y1="0" x2="0" y2="${H}" stroke="#4c8bf5" stroke-dasharray="3 3" opacity="0"/>`;
+    <line id="mk" x1="0" y1="0" x2="0" y2="${H}" stroke="var(--accent)" stroke-dasharray="3 3" opacity="0"/>`;
 }
 function markChart(r){
   const W=600, n=current.rounds.length, mk=$("mk"); if(!mk) return;
@@ -456,6 +589,8 @@ document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x===b));
   $("tab-replay").hidden = b.dataset.tab!=='replay';
   $("tab-compare").hidden = b.dataset.tab!=='compare';
+  $("tab-robust").hidden = b.dataset.tab!=='robust';
+  $("tab-heat").hidden = b.dataset.tab!=='heat';
 });
 function ratioRows(items, cls){
   return items.map(it=>`<div class="cmprow"><div class="lab">${it.label}</div><div class="cmptrack"><div class="cmpfill ${cls}" style="width:${(it.ratio*100).toFixed(0)}%"></div></div><div class="cmpval">${it.ratio.toFixed(2)}</div></div>`).join("");
@@ -474,6 +609,54 @@ function renderComparison(){
   }).join("");
 }
 renderComparison();
+
+const COLORS = ['#7A9CC6','#D9A45B','#8FAE8B','#C97B6D','#A48FC0','#7FB5AE','#C98BAA','#A3A097'];
+
+// --- Robustness: grouped bar charts (paper Fig. 4 style) ---
+function barChart(m){
+  const W=760,H=250,ml=34,mr=10,mt=12,mb=70,iw=W-ml-mr,ih=H-mt-mb;
+  const cats=m.cols, series=m.rows, gW=iw/cats.length;
+  const bW=Math.max(3,Math.min(34,(gW-8)/series.length));
+  let s=`<svg viewBox="0 0 ${W} ${H}" class="barsvg">`;
+  [0,.25,.5,.75,1].forEach(t=>{const y=mt+ih-t*ih; s+=`<line class="grid" x1="${ml}" y1="${y}" x2="${W-mr}" y2="${y}"/><text class="ytick" x="${ml-5}" y="${y+3}">${t}</text>`;});
+  cats.forEach((c,ci)=>{
+    const gx=ml+ci*gW, off=(gW-bW*series.length)/2;
+    series.forEach((r,ri)=>{
+      const v=(m.cells[r]||{})[c]; if(v==null) return;
+      const h=v*ih, x=gx+off+ri*bW;
+      s+=`<rect x="${x}" y="${mt+ih-h}" width="${bW-1.5}" height="${h}" fill="${COLORS[ri%COLORS.length]}"><title>${esc(r)} · ${esc(c)}: ${v.toFixed(2)}</title></rect>`;
+    });
+    const lx=gx+gW/2, ly=mt+ih+12;
+    s+=`<text class="xtick" x="${lx}" y="${ly}" transform="rotate(-20 ${lx} ${ly})">${esc(c)}</text>`;
+  });
+  return s+`</svg>`;
+}
+function robLegend(models){return `<div class="blegend">`+models.map((m,i)=>`<span class="bchip"><i style="background:${COLORS[i%COLORS.length]}"></i>${esc(m)}</span>`).join("")+`</div>`;}
+function renderRobustness(){
+  const rb=DATA.robustness;
+  if(!rb||!rb.arms||!rb.arms.length){const t=$("robTab"); if(t) t.style.display="none"; return;}
+  $("robBody").innerHTML=rb.arms.map(a=>`<div class="panel"><h2>${esc(a.arm)}</h2>${robLegend(a.matrices[0].rows)}${a.matrices.map(m=>`<h3 class="cmp-h">${esc(m.title)}</h3>${barChart(m)}`).join("")}</div>`).join("");
+}
+renderRobustness();
+
+// --- Player×player behavioural heatmaps (paper Fig. 5 style) ---
+function hmCell(v,vmin,vmax){
+  const t=(vmax>vmin)?(v-vmin)/(vmax-vmin):0;
+  const txt=Number.isInteger(v)?v:v.toFixed(2);
+  return `<td class="rcell" style="background:rgba(217,181,76,${(0.08+0.72*t).toFixed(3)})">${txt}</td>`;
+}
+function heatmap(m){
+  const P=m.players;
+  const head=`<tr><th></th>${P.map(c=>`<th class="rlab">${esc(c)}</th>`).join("")}</tr>`;
+  const body=P.map(r=>`<tr><th class="rlab">${esc(r)}</th>${P.map(c=>{const v=(m.cells[r]||{})[c]; return (v==null)?'<td class="rcell">·</td>':hmCell(v,m.vmin,m.vmax);}).join("")}</tr>`).join("");
+  return `<h3 class="cmp-h">${esc(m.title)}</h3><div class="hmwrap"><table class="matrix">${head}${body}</table></div>`;
+}
+function renderHeatmaps(){
+  const hm=DATA.heatmaps;
+  if(!hm||!hm.maps||!hm.maps.length){const t=$("hmTab"); if(t) t.style.display="none"; return;}
+  $("hmBody").innerHTML=`<div class="panel"><p class="sub" style="margin:0 0 10px">Player 1 (row) vs Player 2 (column), base mode, averaged over the 10 rounds — the paper's Fig. 5 behavioural matrices. Greener = higher.</p>`+hm.maps.map(heatmap).join("")+`</div>`;
+}
+renderHeatmaps();
 
 fillSelect($("gameSel"), DATA.games);
 refreshN1();

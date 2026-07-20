@@ -1,0 +1,61 @@
+# Mixed base+SCoT full mesh via the gateway: every model enters the roster twice
+# (plain and +scot), so base players face SCoT players (e.g. gpt-4.1 vs
+# gpt-4.1-mini+scot) in addition to base-vs-base and scot-vs-scot. Pairings that
+# already ran in llm_gw_multi / llm_gw_scot hit the LLM cache; only the cross
+# matches cost new gateway calls.
+name: llm_gw_mixed
+rounds: 10
+seed: 42
+mode: mixed
+reasoning: true
+self_play: true
+model_vs_model: true
+
+models:
+  - id: gpt-4.1
+    provider: openai
+    model: ${LLM_GW_MODEL_1}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: gpt-4.1-mini
+    provider: openai
+    model: ${LLM_GW_MODEL_2}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: gemini-3.1-pro-preview
+    provider: openai
+    model: ${LLM_GW_MODEL_3}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: gemini-3.1-flash-lite
+    provider: openai
+    model: ${LLM_GW_MODEL_4}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: claude-opus-4-6
+    provider: openai
+    model: ${LLM_GW_MODEL_5}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+  - id: claude-haiku-4-5
+    provider: openai
+    model: ${LLM_GW_MODEL_6}
+    base_url: ${LLM_GW_BASE_URL}
+    params: { temperature: 0.0, max_tokens: 2048 }
+
+opponents:
+  - tit_for_tat
+  - always_defect
+
+games:
+  canonical: [pd, bos]
+
+robustness:
+  randomize_order: true
+  utility_label: points
+  cover_story: none
+
+cache:
+  backend: postgres
+
+output_dir: results

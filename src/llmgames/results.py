@@ -200,7 +200,7 @@ def generate_results_md(run, run_result: RunResult) -> Path:
 
     comparison = None
     if _PAPER_PD.exists() and _PAPER_BOS.exists():
-        scot_rounds = run_result.rounds_csv if run.mode == "scot" else None
+        scot_rounds = run_result.rounds_csv if run.mode in ("scot", "mixed") else None
         comparison = build_comparison(_PAPER_PD, _PAPER_BOS, run_result.rounds_csv, scot_rounds)
     replay_html = generate_replay_html(
         run_result.rounds_csv,

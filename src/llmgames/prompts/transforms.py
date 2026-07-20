@@ -40,6 +40,9 @@ class Framing:
     # Matches the original opening sentence ("...with another player."); cover stories
     # override with their own intro using the {opponent} placeholder.
     intro: str = "You are playing a game repeatedly with another player."
+    # Horizon sentence. None = the default fixed-round clause (baseline). Set to inject
+    # the paper's ending-probability framing (indefinite horizon + per-round end chance).
+    horizon: str | None = None
 
     def label(self, action: Action) -> str:
         """Returns the display label for a known internal action."""

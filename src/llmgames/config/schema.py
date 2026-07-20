@@ -104,7 +104,8 @@ class RunSpec(BaseModel):
         name: Run name, used for the output directory.
         rounds: Rounds per match (paper default: 10).
         seed: Master seed for all randomized arms.
-        mode: "base" or "scot" (Social Chain-of-Thought).
+        mode: "base", "scot" (Social Chain-of-Thought), or "mixed" (both variants of
+            every model enter the roster, so base and SCoT players face each other).
         reasoning: If true, prompts ask the model to explain briefly before choosing;
             the rationale is captured to thoughts.csv and shown in the replay.
         models: Models under test (>= 1).
@@ -121,7 +122,7 @@ class RunSpec(BaseModel):
     name: str = "paper_default"
     rounds: int = 10
     seed: int = 42
-    mode: Literal["base", "scot"] = "base"
+    mode: Literal["base", "scot", "mixed"] = "base"
     reasoning: bool = False
     models: list[ModelSpec] = Field(min_length=1)
     opponents: list[str] = Field(default_factory=list)
