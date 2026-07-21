@@ -28,3 +28,4 @@ htmlcov/
 
 # Run outputs (regenerated) — only the top-level results/, not docs/results/
 /results/
+tests/
